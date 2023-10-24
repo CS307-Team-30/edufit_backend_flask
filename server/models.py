@@ -1,6 +1,9 @@
 from flask_sqlalchemy import SQLAlchemy
 from uuid import uuid4
 
+import jwt
+import datetime
+
 db = SQLAlchemy()
 
 def get_uuid():
@@ -28,16 +31,12 @@ class User(db.Model):
         db.Text,
         nullable=False
     )
-
-class PrivacySettings(db.Model):
-    __tablename__ = "privacy_settings"
-    profile_visibility = db.Column(
-        db.Boolean
-    )
-    message_privacy = db.Column(
-        db.Boolean
+    privilege = db.Column(
+        db.Integer,
+        default=0
     )
 
+'''
 class Metrics(db.Model):
     __tablename__ = "metrics"
     height = db.Column(
@@ -97,3 +96,4 @@ class Comment(db.Model):
     timestamp = db.Column(
         db.DateTime
     )
+'''

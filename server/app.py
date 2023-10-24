@@ -1,12 +1,22 @@
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, make_response
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS, cross_origin
 from flask_session import Session
 from config import ApplicationConfig
 from models import db, User
+from functools import wraps
+from dotenv import load_dotenv
+
+import jwt
+import os
+import datetime
+
+load_dotenv()
 
 app = Flask(__name__)
 app.config.from_object(ApplicationConfig)
+
+secret_key = "this_is_a_key"
 
 bcrypt = Bcrypt(app)
 CORS(app, supports_credentials=True)
@@ -15,6 +25,36 @@ db.init_app(app)
 
 with app.app_context():
     db.create_all()
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.args.get('token')
+
+        if not token:
+            return jsonify({
+                "error": "Token is missing"
+            }), 400
+
+        try:
+            data = jwt.decode(token, secret_key, algorithms=["HS256"])
+        except:
+            return jsonify({
+                "error": "Token is invalid"
+            }), 400
+
+        return f(*args, **kwargs)
+
+    return decorated
+
+@app.route("/protected")
+@token_required
+def protected():
+    return jsonify({"message": "Access granted (got token)"})
+
+@app.route("/unprotected")
+def unprotected():
+    return jsonify({"message": "This is viewable by anyone."})
 
 @app.route("/@me")
 def get_current_user():
@@ -51,11 +91,28 @@ def register_user():
     
     # session["user_id"] = new_user.id
 
+    token = jwt.encode(
+        {
+            "id": new_user.id,
+            "username": new_user.username,
+            "email": new_user.email,
+            'exp' : datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+        },
+        secret_key,
+        algorithm="HS256"
+    )
+
+    return jsonify({
+        "token": token
+    })
+
+    '''
     return jsonify({
         "id": new_user.id,
         "username": new_user.username,
         "email": new_user.email
     })
+    '''
 
 @app.route("/login", methods=["POST"])
 def login_user():
@@ -72,11 +129,28 @@ def login_user():
     
     # session["user_id"] = user.id
 
+    token = jwt.encode(
+        {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            'exp' : datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+        },
+        secret_key,
+        algorithm="HS256"
+    )
+
+    return jsonify({
+        "token": token
+    })
+
+    '''
     return jsonify({
         "id": user.id,
         "username": user.username,
         "email": user.email
     })
+    '''
 
 @app.route("/logout", methods=["POST"])
 def logout_user():
