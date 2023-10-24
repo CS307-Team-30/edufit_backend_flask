@@ -13,7 +13,7 @@ models.py
 - Handles the structure of the database, including objects and classes.
 
 requirements.txt
-- List of libraries and imports to be included.
+- List of libraries and dependencies to be included.
 - Use command "pip install -r .\requirements.txt" to download all items in the list in one go.
 
 .env
@@ -24,3 +24,10 @@ instance/db.sqlite
 - If the file does not exist, it will be created upon program run.
 - If the file does exist, the program will load it. (Data is saved when server is shut off.)
 - Delete db.sqlite to reset the database.
+
+HOW TO RUN:
+- Ensure python is downloaded
+- Navigate to directory of "server" in the project
+- Run pip install -r .\requirements.txt to install dependencies
+- Run python app.py to start up the server
+- Backend server will be running on localhost:5000
