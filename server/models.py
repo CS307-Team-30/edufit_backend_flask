@@ -18,7 +18,7 @@ class User(db.Model):
         default=get_uuid
     )
     username = db.Column(
-        db.String(345), 
+        db.String(345),
         unique=True,
         nullable=False
     )
@@ -35,6 +35,47 @@ class User(db.Model):
         db.Integer,
         default=0
     )
+    # Additional fields to match the TypeScript interface
+    meals = db.relationship('Meal', backref='user', lazy=True)
+    nutrition_goals = db.relationship('NutritionGoals', back_populates='users', uselist=False)
+    communities = db.relationship('Community', secondary='user_community', back_populates='users')
+    workout_plan = db.relationship('WorkoutPlan', back_populates='users', uselist=False)
+    metrics = db.relationship('Metrics', back_populates='users', uselist=False)
+    privacy_settings = db.relationship('PrivacySettings', back_populates='users', uselist=False)
+    notifications = db.relationship('Notification', backref='user', lazy=True)
+    moderator = db.Column(
+        db.Boolean,
+        default=False
+    )
+    authentication_token = db.Column(
+        db.String(345)
+    )
+    exp = db.Column(
+        db.Integer,
+        default=0
+    )
+
+
+class Meal(db.Model):
+    __tablename__ = "meals"
+    mealId = db.Column(db.String(32), primary_key=True, unique=True)
+    name = db.Column(db.String(345), nullable=False)
+    protein = db.Column(db.Float, nullable=False)
+    carbs = db.Column(db.Float, nullable=False)
+    fats = db.Column(db.Float, nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False)
+    user_id = db.Column(db.String(32), db.ForeignKey('users.id'))
+
+
+    __tablename__ = "meals"
+    mealId = db.Column(db.String(32), primary_key=True, unique=True)
+    name = db.Column(db.String(345), nullable=False)
+    protein = db.Column(db.Float, nullable=False)
+    carbs = db.Column(db.Float, nullable=False)
+    fats = db.Column(db.Float, nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False)
+    user_id = db.Column(db.String(32), db.ForeignKey('users.id'))
+
 
 '''
 class Metrics(db.Model):
