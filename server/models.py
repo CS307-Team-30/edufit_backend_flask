@@ -9,29 +9,27 @@ db = SQLAlchemy()
 def get_uuid():
     return uuid4().hex
 
+
+# Meal Model
 class Meal(db.Model):
     __tablename__ = "meals"
-    mealId = db.Column(db.String(32), primary_key=True, unique=True)
+    mealId = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(345), nullable=False)
-    protein = db.Column(db.Float, nullable=False)
-    carbs = db.Column(db.Float, nullable=False)
-    fats = db.Column(db.Float, nullable=False)
+    # Nutrients will be stored as a JSON string
+    nutrients = db.Column(db.JSON)
     timestamp = db.Column(db.DateTime, nullable=False)
     user_id = db.Column(db.String(32), db.ForeignKey('users.id'))
 
-
+# NutritionGoals Model
 class NutritionGoals(db.Model):
     __tablename__ = "nutrition_goals"
-    id = db.Column(db.String(32), primary_key=True, unique=True)
-    protein = db.Column(db.Float, nullable=False)
-    carbs = db.Column(db.Float, nullable=False)
-    fats = db.Column(db.Float, nullable=False)
-    user_id = db.Column(db.String(32), db.ForeignKey('users.id'), unique=True)
+    id = db.Column(db.Integer, primary_key=True)
+    macroRatio = db.Column(db.Float, nullable=False)
+    # MicronutrientGoals will be stored as a JSON string
+    micronutrientGoals = db.Column(db.JSON)
+    user_id = db.Column(db.String(32), db.ForeignKey('users.id'))
 
-    # Establish a one-to-one relationship to the User model
-    user = db.relationship('User', back_populates='nutrition_goals', uselist=False)
-
-
+# Community Model
 class Community(db.Model):
     __tablename__ = "communities"
     communityId = db.Column(db.Integer, primary_key=True)
@@ -44,6 +42,31 @@ user_community = db.Table('user_community',
     db.Column('user_id', db.String(32), db.ForeignKey('users.id'), primary_key=True),
     db.Column('community_id', db.Integer, db.ForeignKey('communities.communityId'), primary_key=True)
 )
+
+# Exercise Model
+class Exercise(db.Model):
+    __tablename__ = "exercises"
+    exerciseId = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(345), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    imageUrl = db.Column(db.String(345), nullable=False)
+
+# Schedule Model
+class Schedule(db.Model):
+    __tablename__ = "schedules"
+    id = db.Column(db.Integer, primary_key=True)
+    # Relationship with UserEvent
+    events = db.relationship('UserEvent', backref='schedule', lazy=True)
+
+# UserEvent Model
+class UserEvent(db.Model):
+    __tablename__ = "user_events"
+    eventId = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(345), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    date = db.Column(db.DateTime, nullable=False)
+    repeat = db.Column(db.String(100))
+    schedule_id = db.Column(db.Integer, db.ForeignKey('schedules.id'))
 
 # WorkoutPlan Model
 class WorkoutPlan(db.Model):
@@ -63,6 +86,7 @@ workout_plan_exercise = db.Table('workout_plan_exercise',
     db.Column('exercise_id', db.Integer, db.ForeignKey('exercises.exerciseId'), primary_key=True)
 )
 
+# Metrics Model
 class Metrics(db.Model):
     __tablename__ = "metrics"
     id = db.Column(db.Integer, primary_key=True)
@@ -71,7 +95,7 @@ class Metrics(db.Model):
     bodyfat = db.Column(db.Float, nullable=False)
     user_id = db.Column(db.String(32), db.ForeignKey('users.id'))
 
-
+# PrivacySettings Model
 class PrivacySettings(db.Model):
     __tablename__ = "privacy_settings"
     id = db.Column(db.Integer, primary_key=True)
@@ -87,7 +111,7 @@ class Notification(db.Model):
     timestamp = db.Column(db.DateTime, nullable=False)
     user_id = db.Column(db.String(32), db.ForeignKey('users.id'))
 
-
+# Updated User Model
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(
@@ -116,11 +140,11 @@ class User(db.Model):
     )
     # Additional fields to match the TypeScript interface
     meals = db.relationship('Meal', backref='user', lazy=True)
-    nutrition_goals = db.relationship('NutritionGoals', back_populates='users', uselist=False)
+    nutrition_goals = db.relationship('NutritionGoals', back_populates='user', uselist=False)
     communities = db.relationship('Community', secondary='user_community', back_populates='users')
-    workout_plan = db.relationship('WorkoutPlan', back_populates='users', uselist=False)
-    metrics = db.relationship('Metrics', back_populates='users', uselist=False)
-    privacy_settings = db.relationship('PrivacySettings', back_populates='users', uselist=False)
+    workout_plan = db.relationship('WorkoutPlan', back_populates='user', uselist=False)
+    metrics = db.relationship('Metrics', back_populates='user', uselist=False)
+    privacy_settings = db.relationship('PrivacySettings', back_populates='user', uselist=False)
     notifications = db.relationship('Notification', backref='user', lazy=True)
     moderator = db.Column(
         db.Boolean,
@@ -133,67 +157,3 @@ class User(db.Model):
         db.Integer,
         default=0
     )
-
-
-
-'''
-class Metrics(db.Model):
-    __tablename__ = "metrics"
-    height = db.Column(
-        db.Integer
-    )
-    weight = db.Column(
-        db.Integer
-    )
-    bodyfat = db.Column(
-        db.Integer
-    )
-
-class Community(db.Model):
-    __tablename__ = "communities"
-    id = db.Column(
-        db.String(32),
-        primary_key=True,
-        unique=True,
-        default=get_uuid
-    )
-    name = db.Column(
-        db.String(345), 
-        unique=True,
-        nullable=False
-    )
-
-class Thread(db.Model):
-    __tablename__ = "threads"
-    id = db.Column(
-        db.String(32),
-        primary_key=True,
-        unique=True,
-        default=get_uuid
-    )
-    title = db.Column(
-        db.String(345), 
-        unique=True,
-        nullable=False
-    )
-    content = db.Column(
-        db.Text,
-        nullable=False
-    )
-
-class Comment(db.Model):
-    __tablename__ = "comments"
-    id = db.Column(
-        db.String(32),
-        primary_key=True,
-        unique=True,
-        default=get_uuid
-    )
-    content = db.Column(
-        db.String(345), 
-        nullable=False
-    )
-    timestamp = db.Column(
-        db.DateTime
-    )
-'''
