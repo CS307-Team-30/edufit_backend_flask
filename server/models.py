@@ -72,6 +72,20 @@ class Metrics(db.Model):
     user_id = db.Column(db.String(32), db.ForeignKey('users.id'))
 
 
+class PrivacySettings(db.Model):
+    __tablename__ = "privacy_settings"
+    id = db.Column(db.Integer, primary_key=True)
+    profileVisibility = db.Column(db.Boolean, default=True)
+    messagePrivacy = db.Column(db.Boolean, default=True)
+    user_id = db.Column(db.String(32), db.ForeignKey('users.id'))
+
+# Notification Model
+class Notification(db.Model):
+    __tablename__ = "notifications"
+    notificationId = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False)
+    user_id = db.Column(db.String(32), db.ForeignKey('users.id'))
 
 
 class User(db.Model):
