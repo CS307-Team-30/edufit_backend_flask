@@ -12,7 +12,7 @@ Base = declarative_base()
 db = SQLAlchemy()
 
 def get_uuid():
-    return uuid4().hex
+    return uuid4().int
 
 
 user_community_association = Table('user_community', db.metadata,
@@ -21,20 +21,40 @@ user_community_association = Table('user_community', db.metadata,
 )
 
 
+class Post(db.Model):
+    __tablename__ = 'posts'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255))
+    content = db.Column(db.Text)
+    
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user = relationship("User", back_populates="posts")
+
+    # Foreign key for the many-to-one relationship with Community
+    community_id = db.Column(db.Integer, db.ForeignKey('communities.id'))
+    community = relationship("Community", back_populates="posts")
+
+    # One-to-many relationship with Comment
+    # comments = relationship("Comment", back_populates="post")
+
+
+
 class Community(db.Model):
     __tablename__ = "communities"
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)   
 
     users = relationship("User", secondary=user_community_association, back_populates='communities')
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    
+    posts = relationship("Post", back_populates="community")
 
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(
-        db.String(32),
+        db.Integer,
         primary_key=True,
         unique=True,
-        default=get_uuid
     )
     username = db.Column(
         db.String(345),
@@ -66,6 +86,9 @@ class User(db.Model):
         db.Integer,
         default=0
     )
+
+
+    posts = relationship("Post", back_populates="user")
 
 # cs_59300 = Community(id=1, name="CS 59300 - Special Topics")
 # cs_59799 = Community(id=2, name="CS 59799 - Graduate Professional Practice")

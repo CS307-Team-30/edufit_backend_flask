@@ -3,7 +3,7 @@ from flask_bcrypt import Bcrypt
 from flask_cors import CORS, cross_origin
 from flask_session import Session
 from config import ApplicationConfig
-from models import Community, db, User
+from models import Community, Post, db, User
 from functools import wraps
 from dotenv import load_dotenv
 
@@ -25,10 +25,25 @@ server_session = Session(app)
 
 db.init_app(app)
 
+dummy_posts = [
+    {"title": "Dummy Post 1", "content": "Content of dummy post 1", "user_id": 1, "community_id": 1},
+    {"title": "Dummy Post 2", "content": "Content of dummy post 2", "user_id": 1, "community_id": 1},
+    # Add more dummy posts as needed
+]
+
 with app.app_context():
 
 
+    # Ensure all tables are created
     db.create_all()
+
+    # Create and add dummy posts to the database
+    for post_data in dummy_posts:
+        post = Post(title=post_data["title"], content=post_data["content"], user_id=post_data["user_id"], community_id=post_data["community_id"])
+        db.session.add(post)
+
+    # Commit the changes to the database
+    db.session.commit()
 
 def token_required(f):
     @wraps(f)
@@ -118,12 +133,70 @@ def register_user():
     })
     '''
 
+
+
+@app.route("/create-post", methods=["POST"])
+def create_post():
+    token = request.json["authToken"]
+    decodedToken = jwt.decode(token, secret_key, algorithms=["HS256"])
+    print(decodedToken)
+    username = decodedToken['username']
+    
+
+    user = User.query.filter_by(username=username).first()
+
+    if user is None:
+        return jsonify({"error": "User does not exist"}), 401
+    
+    community_id = request.json["communityId"]
+    post_title = request.json["postTitle"]
+    post_content = request.json["postDescription"]
+
+    # Create a new Post object
+    new_post = Post(
+        title=post_title,  # Assuming the post content has a title
+        content=post_content,  # Assuming the post content has the actual content
+        user_id=user.id,
+        community_id=community_id
+    )
+
+    # Add the new post to the database
+    db.session.add(new_post)
+    db.session.commit()
+
+    return jsonify({"message": "Post created successfully"}), 201
+
+
+    # token = jwt.encode(
+    #     {
+    #         "id": user.id,
+    #         "username": user.username,
+    #         "email": user.email,
+    #         'exp' : datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+    #     },
+    #     secret_key,
+    #     algorithm="HS256"
+    # )
+
+    # return jsonify({
+    #     "token": token
+    # })
+
+    '''
+    return jsonify({
+        "id": user.id,
+        "username": user.username,
+        "email": user.email
+    })
+    '''
+
 @app.route("/login", methods=["POST"])
 def login_user():
     username = request.json["username"]
     password = request.json["password"]
 
     user = User.query.filter_by(username=username).first()
+    print(user.id)
 
     if user is None:
         return jsonify({"error": "User does not exist"}), 401
@@ -200,5 +273,5 @@ def logout_user():
 
 if __name__ == "__main__":
 # Creating instances of the Community class for each CS course
-
+    
     app.run(port=8000, debug=True)
