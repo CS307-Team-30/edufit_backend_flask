@@ -3,7 +3,7 @@ from flask_bcrypt import Bcrypt
 from flask_cors import CORS, cross_origin
 from flask_session import Session
 from config import ApplicationConfig
-from models import db, User
+from models import Community, Post, db, User
 from functools import wraps
 from dotenv import load_dotenv
 
@@ -21,10 +21,28 @@ secret_key = "this_is_a_key"
 bcrypt = Bcrypt(app)
 CORS(app, supports_credentials=True)
 server_session = Session(app)
+
+
 db.init_app(app)
 
+dummy_posts = [
+    {"title": "Dummy Post 1", "content": "Content of dummy post 1", "user_id": 1, "community_id": 1},
+    {"title": "Dummy Post 2", "content": "Content of dummy post 2", "user_id": 1, "community_id": 1},
+    # Add more dummy posts as needed
+]
+
 with app.app_context():
+
+    # Ensure all tables are created
     db.create_all()
+
+    # Create and add dummy posts to the database
+    for post_data in dummy_posts:
+        post = Post(title=post_data["title"], content=post_data["content"], user_id=post_data["user_id"], community_id=post_data["community_id"])
+        db.session.add(post)
+
+    # Commit the changes to the database
+    db.session.commit()
 
 def decode_token(token: str):
     try:
@@ -43,13 +61,13 @@ def token_required(f):
                 "error": "Token is missing"
             }), 400
 
-        data = decode_token(token)
-
-        if data is None:
+        try:
+            data = jwt.decode(token, secret_key, algorithms=["HS256"])
+        except:
             return jsonify({
                 "error": "Token is invalid"
             }), 400
-            
+
         return f(*args, **kwargs)
 
     return decorated
@@ -78,7 +96,6 @@ def get_current_user():
     }) 
 
 @app.route("/register", methods=["POST"])
-@cross_origin()
 def register_user():
 
     '''
@@ -122,8 +139,53 @@ def register_user():
         "token": token
     })
 
+@app.route("/create-post", methods=["POST"])
+def create_post():
+    token = request.json["authToken"]
+    decodedToken = decode_token(token)
+
+    username = decodedToken['username']
+    
+    user = User.query.filter_by(username=username).first()
+
+    if user is None:
+        return jsonify({"error": "User does not exist"}), 401
+    
+    community_id = request.json["communityId"]
+    post_title = request.json["postTitle"]
+    post_content = request.json["postDescription"]
+
+    # Create a new Post object
+    new_post = Post(
+        title=post_title,  # Assuming the post content has a title
+        content=post_content,  # Assuming the post content has the actual content
+        user_id=user.id,
+        community_id=community_id
+    )
+
+    # Add the new post to the database
+    db.session.add(new_post)
+    db.session.commit()
+
+    return jsonify({"message": "Post created successfully"}), 201
+
+
+    # token = jwt.encode(
+    #     {
+    #         "id": user.id,
+    #         "username": user.username,
+    #         "email": user.email,
+    #         'exp' : datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+    #     },
+    #     secret_key,
+    #     algorithm="HS256"
+    # )
+
+    # return jsonify({
+    #     "token": token
+    # })
+
 @app.route("/login", methods=["POST"])
-@cross_origin()
 def login_user():
 
     '''
@@ -160,67 +222,44 @@ def login_user():
         "token": token
     })
 
-@app.route("/get_profile", methods=["POST"])
-@cross_origin()
-def get_profile():
+@app.route("/create-community", methods=["POST"])
+def create_community():
+    # Retrieve data from the POST request
+    data = request.json
 
-    '''
-    body:
-    {
-        "token": <authentication token>
-    }
-    '''
+    # Check if the required data is present
+    if not data or 'name' not in data:
+        return jsonify({"error": "Missing community name"}), 400
 
-    token_data = decode_token(token)
-    if token_data is None:
-        return jsonify({"error": "Token invalid!"}), 401
+    # Create a new Community instance
+    new_community = Community(name=data['name'])
 
-    user_id = token_data["id"]
+    # Add the new community to the database
+    db.session.add(new_community)
 
+    # Commit the changes to the database
+    try:
+        db.session.commit()
+        return jsonify({"message": "Community created successfully", "id": new_community.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
+@app.route("/all-communities", methods=["GET"])
+def get_communities():
+    communities = Community.query.all()
 
+    # Convert the community objects to a list of dictionaries
+    communities_list = [{'id': community.id, 'name': community.name} for community in communities]
 
-@app.route("/send_message", methods=["POST"])
-@cross_origin()
-def send_message():
+    # Return the list as JSON
 
-    '''
-    body:
-    {
-        "token": <authentication token>,
-        "recipient_username": <username of person that gets message>,
-        "title": <title of message>,
-        "body": <the contents of the message>
-    }
-    '''
-
-    token_data = decode_token(token)
-    if token_data is None:
-        return jsonify({"error": "Token invalid!"}), 401
-
-    recipient_username = request.json["recipient_username"]
-    recipient = User.query.filter_by(username=recipient_username).first()
-    if recipient is None:
-        return jsonify({"error": "Recipient not found!"}), 401
-
-    msg_title = request.json["title"]
-    msg_body = request.json["body"]
-
-    new_msg = Message(
-        sender_id = token_data["id"],
-        recipient_id = recipient.id,
-        title = msg_title,
-        content = msg_body
-    )
-
-    db.session.add(new_msg)
-    db.session.commit()
-
-    # Ask Arnob if this needs to return anything
-    return jsonify({"msg": "Message sent!"}), 200
+    try:
+        return jsonify(communities_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/get_messages", methods=["POST"])
-@cross_origin()
 def get_messages():
     
     '''
@@ -240,13 +279,30 @@ def get_messages():
     messages = Messages.query.filter_by(recipient_id = user_id)
 
     # Converts to table
-    message_list = [{'id': community.id, 'name': community.name} for message in messages]
+    message_list = [
+        {
+            'msg_id': message.msg_id,
+            'sender_id': message.sender_id,
+            'recipient_id': message.recipient_id,
+            'title': message.title,
+            'content': message.content,
+            'read': message.read
+        } 
+        for message in messages
+    ]
 
+    # Return the list as JSON
+    try:
+        return jsonify(message_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-# Still requires implementation, could just be a redirect to homepage?
 @app.route("/logout", methods=["POST"])
 def logout_user():
+    # session.pop("user_id")
     return "200"
 
 if __name__ == "__main__":
+# Creating instances of the Community class for each CS course
+    
     app.run(port=8000, debug=True)
