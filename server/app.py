@@ -3,7 +3,7 @@ from flask_bcrypt import Bcrypt
 from flask_cors import CORS, cross_origin
 from flask_session import Session
 from config import ApplicationConfig
-from models import db, User
+from models import Community, db, User
 from functools import wraps
 from dotenv import load_dotenv
 
@@ -21,9 +21,13 @@ secret_key = "this_is_a_key"
 bcrypt = Bcrypt(app)
 CORS(app, supports_credentials=True)
 server_session = Session(app)
+
+
 db.init_app(app)
 
 with app.app_context():
+
+
     db.create_all()
 
 def token_required(f):
@@ -151,6 +155,43 @@ def login_user():
         "email": user.email
     })
     '''
+@app.route("/create-community", methods=["POST"])
+def create_community():
+    # Retrieve data from the POST request
+    data = request.json
+
+    # Check if the required data is present
+    if not data or 'name' not in data:
+        return jsonify({"error": "Missing community name"}), 400
+
+    # Create a new Community instance
+    new_community = Community(name=data['name'])
+
+    # Add the new community to the database
+    db.session.add(new_community)
+
+    # Commit the changes to the database
+    try:
+        db.session.commit()
+        return jsonify({"message": "Community created successfully", "id": new_community.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/all-communities", methods=["GET"])
+def get_communities():
+    communities = Community.query.all()
+
+    # Convert the community objects to a list of dictionaries
+    communities_list = [{'id': community.id, 'name': community.name} for community in communities]
+
+    # Return the list as JSON
+
+    try:
+        return jsonify(communities_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/logout", methods=["POST"])
 def logout_user():
@@ -158,4 +199,6 @@ def logout_user():
     return "200"
 
 if __name__ == "__main__":
+# Creating instances of the Community class for each CS course
+
     app.run(port=8000, debug=True)
