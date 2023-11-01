@@ -11,6 +11,7 @@ def get_uuid():
 
 class User(db.Model):
     __tablename__ = "users"
+    # Basic credentials (NOT NULLABLE)
     id = db.Column(
         db.String(32),
         primary_key=True,
@@ -55,7 +56,6 @@ class User(db.Model):
         default=0
     )
 
-
 class Meal(db.Model):
     __tablename__ = "meals"
     mealId = db.Column(db.String(32), primary_key=True, unique=True)
@@ -67,14 +67,34 @@ class Meal(db.Model):
     user_id = db.Column(db.String(32), db.ForeignKey('users.id'))
 
 
-    __tablename__ = "meals"
-    mealId = db.Column(db.String(32), primary_key=True, unique=True)
-    name = db.Column(db.String(345), nullable=False)
-    protein = db.Column(db.Float, nullable=False)
-    carbs = db.Column(db.Float, nullable=False)
-    fats = db.Column(db.Float, nullable=False)
-    timestamp = db.Column(db.DateTime, nullable=False)
-    user_id = db.Column(db.String(32), db.ForeignKey('users.id'))
+class Message (db.Model):
+    __tablename__ = "messages"
+    msg_id = db.Column(
+        db.String(32),
+        primary_key=True,
+        unique=True,
+        default=get_uuid
+    )
+    sender_id = db.Column(
+        db.String(32),
+        db.ForeignKey('users.id'),
+        nullable=False
+    )
+    recipient_id = db.Column(
+        db.String(32),
+        db.ForeignKey('users.id'),
+        nullable=False
+    )
+    title = db.Column(
+        db.Text
+    )
+    content = db.Column(
+        db.Text
+    )
+    read = db.Column(
+        db.Boolean,
+        default=False
+    )
 
 
 '''

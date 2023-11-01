@@ -26,6 +26,13 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
+def decode_token(token: str):
+    try:
+        data = jwt.decode(token, secret_key, algorithms=["HS256"])
+    except:
+        return None
+    return data
+
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -36,13 +43,13 @@ def token_required(f):
                 "error": "Token is missing"
             }), 400
 
-        try:
-            data = jwt.decode(token, secret_key, algorithms=["HS256"])
-        except:
+        data = decode_token(token)
+
+        if data is None:
             return jsonify({
                 "error": "Token is invalid"
             }), 400
-
+            
         return f(*args, **kwargs)
 
     return decorated
@@ -71,7 +78,18 @@ def get_current_user():
     }) 
 
 @app.route("/register", methods=["POST"])
+@cross_origin()
 def register_user():
+
+    '''
+    body:
+    {
+        "username": <username>,
+        "email": <email>,
+        "password": <password>
+    }
+    '''
+
     username = request.json["username"]
     email = request.json["email"]
     password = request.json["password"]
@@ -88,8 +106,6 @@ def register_user():
     new_user = User(username=username, email=email, password=hashed_password)
     db.session.add(new_user)
     db.session.commit()
-    
-    # session["user_id"] = new_user.id
 
     token = jwt.encode(
         {
@@ -106,16 +122,18 @@ def register_user():
         "token": token
     })
 
+@app.route("/login", methods=["POST"])
+@cross_origin()
+def login_user():
+
     '''
-    return jsonify({
-        "id": new_user.id,
-        "username": new_user.username,
-        "email": new_user.email
-    })
+    body:
+    {
+        "username": <username>,
+        "password": <password>
+    }
     '''
 
-@app.route("/login", methods=["POST"])
-def login_user():
     username = request.json["username"]
     password = request.json["password"]
 
@@ -126,8 +144,6 @@ def login_user():
 
     if not bcrypt.check_password_hash(user.password, password):
         return jsonify({"error": "Password is incorrect"}), 401
-    
-    # session["user_id"] = user.id
 
     token = jwt.encode(
         {
@@ -144,17 +160,92 @@ def login_user():
         "token": token
     })
 
+@app.route("/get_profile", methods=["POST"])
+@cross_origin()
+def get_profile():
+
     '''
-    return jsonify({
-        "id": user.id,
-        "username": user.username,
-        "email": user.email
-    })
+    body:
+    {
+        "token": <authentication token>
+    }
     '''
 
+    token_data = decode_token(token)
+    if token_data is None:
+        return jsonify({"error": "Token invalid!"}), 401
+
+    user_id = token_data["id"]
+
+
+
+
+@app.route("/send_message", methods=["POST"])
+@cross_origin()
+def send_message():
+
+    '''
+    body:
+    {
+        "token": <authentication token>,
+        "recipient_username": <username of person that gets message>,
+        "title": <title of message>,
+        "body": <the contents of the message>
+    }
+    '''
+
+    token_data = decode_token(token)
+    if token_data is None:
+        return jsonify({"error": "Token invalid!"}), 401
+
+    recipient_username = request.json["recipient_username"]
+    recipient = User.query.filter_by(username=recipient_username).first()
+    if recipient is None:
+        return jsonify({"error": "Recipient not found!"}), 401
+
+    msg_title = request.json["title"]
+    msg_body = request.json["body"]
+
+    new_msg = Message(
+        sender_id = token_data["id"],
+        recipient_id = recipient.id,
+        title = msg_title,
+        content = msg_body
+    )
+
+    db.session.add(new_msg)
+    db.session.commit()
+
+    # Ask Arnob if this needs to return anything
+    return jsonify({"msg": "Message sent!"}), 200
+
+@app.route("/get_messages", methods=["POST"])
+@cross_origin()
+def get_messages():
+    
+    '''
+    body:
+    {
+        "token": <authentication token>
+    }
+    '''
+
+    token_data = decode_token(token)
+    if token_data is None:
+        return jsonify({"error": "Token invalid!"}), 401
+
+    user_id = token_data["id"]
+
+    # Gets all messages with current user as the recipient id
+    messages = Messages.query.filter_by(recipient_id = user_id)
+
+    # Converts to table
+    message_list = [{'id': community.id, 'name': community.name} for message in messages]
+
+
+# Still requires implementation, could just be a redirect to homepage?
 @app.route("/logout", methods=["POST"])
 def logout_user():
-    # session.pop("user_id")
     return "200"
 
 if __name__ == "__main__":
