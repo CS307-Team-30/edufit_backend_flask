@@ -139,51 +139,28 @@ def get_community_posts(community_id):
     posts = Post.query.filter_by(community_id=community_id).all()
 
     # Convert the posts to a list of dictionaries for JSON serialization
-    posts_list = [
-        {
+    posts_list = []
+    for post in posts:
+        # Fetch the user and community details
+        user = User.query.get(post.user_id)
+        community = Community.query.get(post.community_id)
+
+        post_details = {
             'id': post.id,
             'title': post.title,
             'content': post.content,
-            'user_id': post.user_id,
-            'community_id': post.community_id
-        } for post in posts
-    ]
+            'author': {
+                'id': user.id,
+                'username': user.username
+            },
+            'community': {
+                'id': community.id,
+                'name': community.name
+            }
+        }
+        posts_list.append(post_details)
 
     return jsonify(posts_list)
-
-@app.route("/", methods=["GET"])
-def create_post():
-    token = request.json["authToken"]
-    decodedToken = jwt.decode(token, secret_key, algorithms=["HS256"])
-    print(decodedToken)
-    username = decodedToken['username']
-    
-
-    user = User.query.filter_by(username=username).first()
-
-    if user is None:
-        return jsonify({"error": "User does not exist"}), 401
-    
-    community_id = request.json["communityId"]
-    post_title = request.json["postTitle"]
-    post_content = request.json["postDescription"]
-
-    # Create a new Post object
-    new_post = Post(
-        title=post_title,  # Assuming the post content has a title
-        content=post_content,  # Assuming the post content has the actual content
-        user_id=user.id,
-        community_id=community_id
-    )
-
-    # Add the new post to the database
-    db.session.add(new_post)
-    db.session.commit()
-
-    return jsonify({"message": "Post created successfully"}), 201
-
-
-
 
 @app.route("/create-post", methods=["POST"])
 def create_post():
