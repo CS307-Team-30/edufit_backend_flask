@@ -149,13 +149,14 @@ def register_user():
 @app.route("/get-profile", methods=["GET"])
 def get_profile():
 
-    token = request.json["authToken"]
+    token = request.args.get('authToken')
     decodedToken = decode_token(token)
 
     if token is None:
         return jsonify({"error": "Token is invalid"}), 401
 
     user_id = decodedToken['id']
+
     profile = Profile.query.filter_by(user_id=user_id).first()
 
     if profile is None:
