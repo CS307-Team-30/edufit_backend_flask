@@ -217,6 +217,38 @@ def create_post():
     })
     '''
 
+@app.route("/hydration", methods=["POST"])
+def userHydration():
+    data = request.json
+    user_id = data.get("id")
+    water_consumed = data.get("waterConsumed")
+
+    if user_id is None or water_consumed is None:
+        return 'Invalid request. Please provide id and waterConsumed.', 400
+
+    user = User.query.get(user_id)
+
+    if user is None:
+        return 'User not found', 404
+
+    user.waterConsumed += water_consumed
+
+    db.session.commit()
+
+    return f'Water consumption updated for user ID: {user_id}', 200
+
+@app.route("/hydration/<int:user_id>", methods=["GET"])
+def getHydrationInfo(user_id):
+    user = User.query.get(user_id)
+
+    if user is None:
+        return 'User not found', 404
+
+    return jsonify({
+        'user_id': user.id,
+        'waterConsumed': user.waterConsumed
+    }), 200
+
 @app.route("/login", methods=["POST"])
 def login_user():
     username = request.json["username"]

@@ -86,6 +86,10 @@ class User(db.Model):
         db.Integer,
         default=0
     )
+    waterConsumed = db.Column(
+        db.Integer,
+        default=0
+    )
 
 
     posts = relationship("Post", back_populates="user")
