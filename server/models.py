@@ -12,7 +12,7 @@ Base = declarative_base()
 db = SQLAlchemy()
 
 def get_uuid():
-    return uuid4().int
+    return uuid4().hex
 
 
 user_community_association = Table('user_community', db.metadata,
@@ -52,7 +52,7 @@ class Community(db.Model):
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(
-        db.Integer,
+        db.String(32),
         primary_key=True,
         unique=True,
         default=get_uuid
@@ -72,7 +72,7 @@ class User(db.Model):
         nullable=False
     )
     privilege = db.Column(
-        db.Integer,
+        db.String(345),
         default=0
     )
     communities = relationship("Community", secondary=user_community_association, back_populates="users")
@@ -83,27 +83,23 @@ class User(db.Model):
     authentication_token = db.Column(
         db.String(345)
     )
-    exp = db.Column(
-        db.Integer,
-        default=0
-    )
     posts = relationship("Post", back_populates="user")
 
 class Profile(db.Model):
     __tablename__ = "profiles"
     id = db.Column(
-        db.Integer,
+        db.String(32),
         primary_key=True,
         unique=True,
         default=get_uuid
     )
     user_id = db.Column(
-        db.Integer,
+        db.String(32),
         db.ForeignKey('users.id'),
         nullable=False
     )
     nickname = db.Column(
-        db.String(32),
+        db.String(345),
         nullable=False
     )
     bio = db.Column(
@@ -118,22 +114,26 @@ class Profile(db.Model):
         db.Boolean,
         default=True
     )
+    last_changed = db.Column(
+        db.DateTime
+    )
+    
 
 class Message(db.Model):
     __tablename__ = "messages"
     msg_id = db.Column(
-        db.Integer,
+        db.String(32),
         primary_key=True,
         unique=True,
         default=get_uuid
     )
     sender_id = db.Column(
-        db.Integer,
+        db.String(32),
         db.ForeignKey('users.id'),
         nullable=False
     )
     recipient_id = db.Column(
-        db.Integer,
+        db.String(32),
         db.ForeignKey('users.id'),
         nullable=False
     )

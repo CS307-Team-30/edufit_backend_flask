@@ -3,12 +3,13 @@ from flask_bcrypt import Bcrypt
 from flask_cors import CORS, cross_origin
 from flask_session import Session
 from config import ApplicationConfig
-from models import Community, Post, db, User, Profile, Message
+from models import Community, Post, db, User, Profile
 from functools import wraps
 from dotenv import load_dotenv
 
 import jwt
 import os
+import datetime
 
 load_dotenv()
 
@@ -32,6 +33,7 @@ dummy_posts = [
 
 with app.app_context():
 
+
     # Ensure all tables are created
     db.create_all()
 
@@ -42,13 +44,6 @@ with app.app_context():
 
     # Commit the changes to the database
     db.session.commit()
-
-def decode_token(token: str):
-    try:
-        data = jwt.decode(token, secret_key, algorithms=["HS256"])
-    except:
-        return None
-    return data
 
 def token_required(f):
     @wraps(f)
@@ -97,22 +92,9 @@ def get_current_user():
 @app.route("/register", methods=["POST"])
 def register_user():
 
-    '''
-    body:
-    {
-        "username": <username>,
-        "email": <email>,
-        "password": <password>
-    }
-    '''
-
-    print("Got request")
-
     username = request.json["username"]
     email = request.json["email"]
     password = request.json["password"]
-
-    print("Got data")
 
     username_in_use = User.query.filter_by(username=username).first() is not None
     if username_in_use:
@@ -123,16 +105,11 @@ def register_user():
         return jsonify({"error": "Email is taken"}), 409
 
     hashed_password = bcrypt.generate_password_hash(password)
-    new_user = User(
-        username=username,
-        email=email,
-        password=hashed_password
-    )
+    new_user = User(username=username, email=email, password=hashed_password)
     db.session.add(new_user)
+
     db.session.commit()
-
-    print("Account created")
-
+    
     new_profile = Profile(
         user_id = new_user.id,
         nickname = new_user.username,
@@ -141,6 +118,7 @@ def register_user():
         visibility = True
     )
     db.session.add(new_profile)
+
     db.session.commit()
 
     print("Profile created")
@@ -160,42 +138,13 @@ def register_user():
         "token": token
     })
 
-@app.route("/login", methods=["POST"])
-def login_user():
-
     '''
-    body:
-    {
-        "username": <username>,
-        "password": <password>
-    }
-    '''
-
-    username = request.json["username"]
-    password = request.json["password"]
-
-    user = User.query.filter_by(username=username).first()
-
-    if user is None:
-        return jsonify({"error": "User does not exist"}), 401
-
-    if not bcrypt.check_password_hash(user.password, password):
-        return jsonify({"error": "Password is incorrect"}), 401
-
-    token = jwt.encode(
-        {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            'exp' : datetime.datetime.utcnow() + datetime.timedelta(hours=3)
-        },
-        secret_key,
-        algorithm="HS256"
-    )
-
     return jsonify({
-        "token": token
+        "id": new_user.id,
+        "username": new_user.username,
+        "email": new_user.email
     })
+    '''
 
 @app.route("/get-profile", methods=["GET"])
 def get_profile():
@@ -255,21 +204,45 @@ def update_profile():
     if not new_profile_pic is None:
         profile.profile_pic = new_profile_pic
 
-    print("before")
-    profile.last_changed = datetime.now()
-    print("after")
-
     db.commit()
+
+@app.route('/community/<int:community_id>', methods=['GET'])
+def get_community_posts(community_id):
+    # Query the database to get all posts for the specified community
+    posts = Post.query.filter_by(community_id=community_id).all()
+
+    # Convert the posts to a list of dictionaries for JSON serialization
+    posts_list = []
+    for post in posts:
+        # Fetch the user and community details
+        user = User.query.get(post.user_id)
+        community = Community.query.get(post.community_id)
+
+        post_details = {
+            'id': post.id,
+            'title': post.title,
+            'content': post.content,
+            'author': {
+                'id': user.id,
+                'username': user.username
+            },
+            'community': {
+                'id': community.id,
+                'name': community.name
+            }
+        }
+        posts_list.append(post_details)
+
+    return jsonify(posts_list)
 
 @app.route("/create-post", methods=["POST"])
 def create_post():
     token = request.json["authToken"]
-    decodedToken = decode_token(token)
-
-    if token is None:
-        return jsonify({"error": "Token is invalid"}), 401
-
+    decodedToken = jwt.decode(token, secret_key, algorithms=["HS256"])
+    print(decodedToken)
     username = decodedToken['username']
+    
+
     user = User.query.filter_by(username=username).first()
 
     if user is None:
@@ -293,6 +266,68 @@ def create_post():
 
     return jsonify({"message": "Post created successfully"}), 201
 
+
+    # token = jwt.encode(
+    #     {
+    #         "id": user.id,
+    #         "username": user.username,
+    #         "email": user.email,
+    #         'exp' : datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+    #     },
+    #     secret_key,
+    #     algorithm="HS256"
+    # )
+
+    # return jsonify({
+    #     "token": token
+    # })
+
+    '''
+    return jsonify({
+        "id": user.id,
+        "username": user.username,
+        "email": user.email
+    })
+    '''
+
+@app.route("/login", methods=["POST"])
+def login_user():
+    username = request.json["username"]
+    password = request.json["password"]
+
+    user = User.query.filter_by(username=username).first()
+    print(user.id)
+
+    if user is None:
+        return jsonify({"error": "User does not exist"}), 401
+
+    if not bcrypt.check_password_hash(user.password, password):
+        return jsonify({"error": "Password is incorrect"}), 401
+    
+    # session["user_id"] = user.id
+
+    token = jwt.encode(
+        {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            'exp' : datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+        },
+        secret_key,
+        algorithm="HS256"
+    )
+
+    return jsonify({
+        "token": token
+    })
+
+    '''
+    return jsonify({
+        "id": user.id,
+        "username": user.username,
+        "email": user.email
+    })
+    '''
 @app.route("/create-community", methods=["POST"])
 def create_community():
     # Retrieve data from the POST request
@@ -407,7 +442,7 @@ def get_messages():
         return jsonify(message_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
+        
 @app.route("/logout", methods=["POST"])
 def logout_user():
     # session.pop("user_id")
