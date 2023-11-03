@@ -38,11 +38,11 @@ with app.app_context():
     db.create_all()
 
     # Create and add dummy posts to the database
-    for post_data in dummy_posts:
-        post = Post(title=post_data["title"], content=post_data["content"], user_id=post_data["user_id"], community_id=post_data["community_id"])
-        db.session.add(post)
+    # for post_data in dummy_posts:
+    #     post = Post(title=post_data["title"], content=post_data["content"], user_id=post_data["user_id"], community_id=post_data["community_id"])
+    #     db.session.add(post)
 
-    # Commit the changes to the database
+    # # Commit the changes to the database
     db.session.commit()
 
 def token_required(f):
@@ -273,7 +273,8 @@ def get_community_posts(community_id):
             },
             'community': {
                 'id': community.id,
-                'name': community.name
+                'name': community.name,
+                'description': community.description
             }
         }
         posts_list.append(post_details)
@@ -385,7 +386,7 @@ def create_community():
         return jsonify({"error": "Missing community name"}), 400
 
     # Create a new Community instance
-    new_community = Community(name=data['name'])
+    new_community = Community(name=data['name'], description=data['description'])
 
     # Add the new community to the database
     db.session.add(new_community)
@@ -403,7 +404,7 @@ def get_communities():
     communities = Community.query.all()
 
     # Convert the community objects to a list of dictionaries
-    communities_list = [{'id': community.id, 'name': community.name} for community in communities]
+    communities_list = [{'id': community.id, 'name': community.name, 'description': community.description} for community in communities]
 
     # Return the list as JSON
 

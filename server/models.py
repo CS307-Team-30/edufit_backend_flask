@@ -43,6 +43,7 @@ class Community(db.Model):
     __tablename__ = "communities"
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)   
+    description = db.Column(db.String, nullable=False)
 
     users = relationship("User", secondary=user_community_association, back_populates='communities')
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
