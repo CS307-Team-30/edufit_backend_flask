@@ -55,6 +55,7 @@ class User(db.Model):
         db.Integer,
         primary_key=True,
         unique=True,
+        default=get_uuid
     )
     username = db.Column(
         db.String(345),
@@ -86,22 +87,53 @@ class User(db.Model):
         db.Integer,
         default=0
     )
+    posts = relationship("Post", back_populates="user")
 
-class Message (db.Model):
+class Profile(db.Model):
+    __tablename__ = "profiles"
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+        unique=True,
+        default=get_uuid
+    )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('users.id'),
+        nullable=False
+    )
+    nickname = db.Column(
+        db.String(32),
+        nullable=False
+    )
+    bio = db.Column(
+        db.Text,
+        default="Hello, I am proud member of EduFit!"
+    )
+    profile_pic = db.Column(
+        db.Text,
+        nullable=True
+    )
+    visibility = db.Column(
+        db.Boolean,
+        default=True
+    )
+
+class Message(db.Model):
     __tablename__ = "messages"
     msg_id = db.Column(
-        db.String(32),
+        db.Integer,
         primary_key=True,
         unique=True,
         default=get_uuid
     )
     sender_id = db.Column(
-        db.String(32),
+        db.Integer,
         db.ForeignKey('users.id'),
         nullable=False
     )
     recipient_id = db.Column(
-        db.String(32),
+        db.Integer,
         db.ForeignKey('users.id'),
         nullable=False
     )
@@ -118,7 +150,7 @@ class Message (db.Model):
 
 
 
-    posts = relationship("Post", back_populates="user")
+    
 
 # cs_59300 = Community(id=1, name="CS 59300 - Special Topics")
 # cs_59799 = Community(id=2, name="CS 59799 - Graduate Professional Practice")

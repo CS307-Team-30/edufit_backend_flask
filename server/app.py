@@ -3,13 +3,12 @@ from flask_bcrypt import Bcrypt
 from flask_cors import CORS, cross_origin
 from flask_session import Session
 from config import ApplicationConfig
-from models import Community, Post, db, User
+from models import Community, Post, db, User, Profile, Message
 from functools import wraps
 from dotenv import load_dotenv
 
 import jwt
 import os
-import datetime
 
 load_dotenv()
 
@@ -107,9 +106,13 @@ def register_user():
     }
     '''
 
+    print("Got request")
+
     username = request.json["username"]
     email = request.json["email"]
     password = request.json["password"]
+
+    print("Got data")
 
     username_in_use = User.query.filter_by(username=username).first() is not None
     if username_in_use:
@@ -120,9 +123,27 @@ def register_user():
         return jsonify({"error": "Email is taken"}), 409
 
     hashed_password = bcrypt.generate_password_hash(password)
-    new_user = User(username=username, email=email, password=hashed_password)
+    new_user = User(
+        username=username,
+        email=email,
+        password=hashed_password
+    )
     db.session.add(new_user)
     db.session.commit()
+
+    print("Account created")
+
+    new_profile = Profile(
+        user_id = new_user.id,
+        nickname = new_user.username,
+        bio = "Hello, I am a proud member of EduFit!",
+        profile_pic = None,
+        visibility = True
+    )
+    db.session.add(new_profile)
+    db.session.commit()
+
+    print("Profile created")
 
     token = jwt.encode(
         {
@@ -138,52 +159,6 @@ def register_user():
     return jsonify({
         "token": token
     })
-
-@app.route("/create-post", methods=["POST"])
-def create_post():
-    token = request.json["authToken"]
-    decodedToken = decode_token(token)
-
-    username = decodedToken['username']
-    
-    user = User.query.filter_by(username=username).first()
-
-    if user is None:
-        return jsonify({"error": "User does not exist"}), 401
-    
-    community_id = request.json["communityId"]
-    post_title = request.json["postTitle"]
-    post_content = request.json["postDescription"]
-
-    # Create a new Post object
-    new_post = Post(
-        title=post_title,  # Assuming the post content has a title
-        content=post_content,  # Assuming the post content has the actual content
-        user_id=user.id,
-        community_id=community_id
-    )
-
-    # Add the new post to the database
-    db.session.add(new_post)
-    db.session.commit()
-
-    return jsonify({"message": "Post created successfully"}), 201
-
-
-    # token = jwt.encode(
-    #     {
-    #         "id": user.id,
-    #         "username": user.username,
-    #         "email": user.email,
-    #         'exp' : datetime.datetime.utcnow() + datetime.timedelta(hours=3)
-    #     },
-    #     secret_key,
-    #     algorithm="HS256"
-    # )
-
-    # return jsonify({
-    #     "token": token
-    # })
 
 @app.route("/login", methods=["POST"])
 def login_user():
@@ -222,6 +197,102 @@ def login_user():
         "token": token
     })
 
+@app.route("/get-profile", methods=["GET"])
+def get_profile():
+
+    token = request.json["authToken"]
+    decodedToken = decode_token(token)
+
+    if token is None:
+        return jsonify({"error": "Token is invalid"}), 401
+
+    user_id = decodedToken['id']
+    profile = Profile.query.filter_by(user_id=user_id).first()
+
+    if profile is None:
+        return jsonify({"error": "Profile does not exist"}), 401
+
+    return jsonify({
+        "user_id": profile.user_id,
+        "nickname": profile.nickname,
+        "bio": profile.bio,
+        "profile_pic": profile.profile_pic
+    })
+
+@app.route("/update-profile", methods=["PUT"])
+def update_profile():
+
+    '''
+    body:
+    {
+        "authToken": <username>,
+        "nickname": <new nickname>
+        "bio": <new bio>,
+        "profile_pic": <new profile pic>
+    }
+    '''
+
+    token = request.json["authToken"]
+    decodedToken = decode_token(token)
+    if token is None:
+        return jsonify({"error": "Token is invalid"}), 401
+
+    user_id = decodedToken['id']
+    profile = Profile.query.filter_by(user_id=user_id).first()
+
+    if profile is None:
+        return jsonify({"error": "Profile does not exist"}), 401
+
+    new_nickname = request.json["nickname"]
+    if not new_nickname is None:
+        profile.nickname = new_nickname
+
+    new_bio = request.json["bio"]
+    if not new_bio is None:
+        profile.bio = new_bio
+    
+    new_profile_pic = request.json["profile_pic"]
+    if not new_profile_pic is None:
+        profile.profile_pic = new_profile_pic
+
+    print("before")
+    profile.last_changed = datetime.now()
+    print("after")
+
+    db.commit()
+
+@app.route("/create-post", methods=["POST"])
+def create_post():
+    token = request.json["authToken"]
+    decodedToken = decode_token(token)
+
+    if token is None:
+        return jsonify({"error": "Token is invalid"}), 401
+
+    username = decodedToken['username']
+    user = User.query.filter_by(username=username).first()
+
+    if user is None:
+        return jsonify({"error": "User does not exist"}), 401
+    
+    community_id = request.json["communityId"]
+    post_title = request.json["postTitle"]
+    post_content = request.json["postDescription"]
+
+    # Create a new Post object
+    new_post = Post(
+        title=post_title,  # Assuming the post content has a title
+        content=post_content,  # Assuming the post content has the actual content
+        user_id=user.id,
+        community_id=community_id
+    )
+
+    # Add the new post to the database
+    db.session.add(new_post)
+    db.session.commit()
+
+    return jsonify({"message": "Post created successfully"}), 201
+
 @app.route("/create-community", methods=["POST"])
 def create_community():
     # Retrieve data from the POST request
@@ -259,16 +330,56 @@ def get_communities():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/get_messages", methods=["POST"])
+@app.route("/send-message", methods=["POST"])
+def send_message():
+
+    '''
+    body:
+    {
+        "authToken": <authentication token>,
+        "recipient_username": <username of person that gets message>,
+        "title": <title of message>,
+        "body": <the contents of the message>
+    }
+    '''
+
+    token = request.json['authToken']
+    token_data = decode_token(token)
+    if token_data is None:
+        return jsonify({"error": "Token invalid!"}), 401
+
+    recipient_username = request.json["recipient_username"]
+    recipient = User.query.filter_by(username=recipient_username).first()
+    if recipient is None:
+        return jsonify({"error": "Recipient not found!"}), 401
+
+    msg_title = request.json["title"]
+    msg_body = request.json["body"]
+
+    new_msg = Message(
+        sender_id = token_data["id"],
+        recipient_id = recipient.id,
+        title = msg_title,
+        content = msg_body
+    )
+
+    db.session.add(new_msg)
+    db.session.commit()
+
+    # Ask Arnob if this needs to return anything
+    return jsonify({"msg": "Message sent!"}), 200
+
+@app.route("/get-messages", methods=["GET"])
 def get_messages():
     
     '''
     body:
     {
-        "token": <authentication token>
+        "authToken": <authentication token>
     }
     '''
 
+    token = request.json['authToken']
     token_data = decode_token(token)
     if token_data is None:
         return jsonify({"error": "Token invalid!"}), 401
