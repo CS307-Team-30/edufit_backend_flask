@@ -38,11 +38,11 @@ with app.app_context():
     db.create_all()
 
     # Create and add dummy posts to the database
-    for post_data in dummy_posts:
-        post = Post(title=post_data["title"], content=post_data["content"], user_id=post_data["user_id"], community_id=post_data["community_id"])
-        db.session.add(post)
+    # for post_data in dummy_posts:
+    #     post = Post(title=post_data["title"], content=post_data["content"], user_id=post_data["user_id"], community_id=post_data["community_id"])
+    #     db.session.add(post)
 
-    # Commit the changes to the database
+    # # Commit the changes to the database
     db.session.commit()
 
 def token_required(f):
@@ -133,6 +133,124 @@ def register_user():
     })
     '''
 
+
+@app.route("/user-communities/<int:user_id>", methods=["GET"])
+def get_user_communities(user_id):
+    # Fetch the user by ID
+    user = User.query.get(user_id)
+
+    # Check if the user exists
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    # Get all communities the user is subscribed to
+    subscribed_communities = user.communities
+
+    # Convert the community objects to a list of dictionaries
+    communities_list = [{
+        'id': community.id,
+        'name': community.name
+    } for community in subscribed_communities]
+
+    # Return the list as JSON
+    return jsonify(communities_list), 200
+
+
+@app.route("/subscribe", methods=["POST"])
+def subscribe_to_community():
+    user_id = request.json.get('user_id')
+    community_id = request.json.get('community_id')
+
+    if not user_id or not community_id:
+        return jsonify({"error": "Missing user ID or community ID"}), 400
+
+    user = User.query.get(user_id)
+    community = Community.query.get(community_id)
+
+    if not user or not community:
+        return jsonify({"error": "User or Community not found"}), 404
+
+    if community in user.communities:
+        return jsonify({"message": "User already subscribed to community"}), 409
+
+    user.communities.append(community)
+    db.session.commit()
+
+    return jsonify({"message": "User subscribed to community successfully"}), 200
+
+
+@app.route("/user-subscribed-posts/<int:user_id>", methods=["GET"])
+def get_user_subscribed_posts(user_id):
+    # Fetch the user by ID
+    user = User.query.get(user_id)
+
+    # Check if the user exists
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    # Get the IDs of communities the user is subscribed to
+    subscribed_community_ids = [community.id for community in user.communities]
+
+    # Query the database to get all posts from these communities
+    posts = Post.query.filter(Post.community_id.in_(subscribed_community_ids)).all()
+
+    # Convert the posts to a list of dictionaries for JSON serialization
+    posts_list = []
+    for post in posts:
+        # Fetch the author and community details
+        author = User.query.get(post.user_id)
+        community = Community.query.get(post.community_id)
+
+        post_details = {
+            'title': post.title,
+            'content': post.content,
+            'author': {
+                'id': author.id,
+                'username': author.username,
+                'email': author.email,
+                # Add other user fields as needed
+            },
+            'community': {
+                'id': community.id,
+                'name': community.name,
+                # Add other community fields as needed
+            },
+            # 'comments': [
+            #     {
+            #         'id': comment.id,
+            #         'content': comment.content,
+            #         # Add other comment fields as needed
+            #     } for comment in post.comments
+            # ] if post.comments else []
+        }
+        posts_list.append(post_details)
+
+    # Return the list as JSON
+    return jsonify(posts_list), 200
+
+@app.route("/unsubscribe", methods=["POST"])
+def unsubscribe_from_community():
+    user_id = request.json.get('user_id')
+    community_id = request.json.get('community_id')
+
+    if not user_id or not community_id:
+        return jsonify({"error": "Missing user ID or community ID"}), 400
+
+    user = User.query.get(user_id)
+    community = Community.query.get(community_id)
+
+    if not user or not community:
+        return jsonify({"error": "User or Community not found"}), 404
+
+    if community not in user.communities:
+        return jsonify({"message": "User not subscribed to community"}), 409
+
+    user.communities.remove(community)
+    db.session.commit()
+
+    return jsonify({"message": "User unsubscribed from community successfully"}), 200
+
+
 @app.route('/community/<int:community_id>', methods=['GET'])
 def get_community_posts(community_id):
     # Query the database to get all posts for the specified community
@@ -155,7 +273,8 @@ def get_community_posts(community_id):
             },
             'community': {
                 'id': community.id,
-                'name': community.name
+                'name': community.name,
+                'description': community.description
             }
         }
         posts_list.append(post_details)
@@ -297,7 +416,7 @@ def create_community():
         return jsonify({"error": "Missing community name"}), 400
 
     # Create a new Community instance
-    new_community = Community(name=data['name'])
+    new_community = Community(name=data['name'], description=data['description'])
 
     # Add the new community to the database
     db.session.add(new_community)
@@ -315,7 +434,7 @@ def get_communities():
     communities = Community.query.all()
 
     # Convert the community objects to a list of dictionaries
-    communities_list = [{'id': community.id, 'name': community.name} for community in communities]
+    communities_list = [{'id': community.id, 'name': community.name, 'description': community.description} for community in communities]
 
     # Return the list as JSON
 
