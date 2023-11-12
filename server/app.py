@@ -148,18 +148,24 @@ def register_user():
 
 @app.route("/get-profile", methods=["GET"])
 def get_profile():
+    print("Starting...")
 
-    token = request.args.get('authToken')
-    decodedToken = decode_token(token)
+    token = request.args.get("authToken")
+    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
+
+    # print("Got token: " + token)
 
     if token is None:
+        print("Token is invalid")
         return jsonify({"error": "Token is invalid"}), 401
 
-    user_id = decodedToken['id']
+    user_id = token_data['id']
+    # print("user_id" + user_id)
 
     profile = Profile.query.filter_by(user_id=user_id).first()
 
     if profile is None:
+        print("Profile does not exist")
         return jsonify({"error": "Profile does not exist"}), 401
 
     return jsonify({
@@ -183,7 +189,7 @@ def update_profile():
     '''
 
     token = request.json["authToken"]
-    decodedToken = decode_token(token)
+    decodedToken = jwt.decode(token, secret_key, algorithms=["HS256"])
     if token is None:
         return jsonify({"error": "Token is invalid"}), 401
 
@@ -379,8 +385,8 @@ def send_message():
     }
     '''
 
-    token = request.json['authToken']
-    token_data = decode_token(token)
+    token = request.json["authToken"]
+    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
     if token_data is None:
         return jsonify({"error": "Token invalid!"}), 401
 
@@ -415,8 +421,8 @@ def get_messages():
     }
     '''
 
-    token = request.json['authToken']
-    token_data = decode_token(token)
+    token = request.json["authToken"]
+    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
     if token_data is None:
         return jsonify({"error": "Token invalid!"}), 401
 
