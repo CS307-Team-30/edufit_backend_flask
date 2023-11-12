@@ -138,13 +138,66 @@ def register_user():
         "token": token
     })
 
+@app.route("/delete-user", methods=["POST"])
+def delete_user():
+
     '''
-    return jsonify({
-        "id": new_user.id,
-        "username": new_user.username,
-        "email": new_user.email
-    })
+    body:
+    {
+        "authToken": <token>,
+        "password": <user password again>
+        "confirmation": <password again>
+    }
     '''
+
+    token = request.args.get("authToken")
+    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
+
+    password = request.json["password"]
+    confirmation = request.json["confirmation"]
+
+    # EXIT 1 : Token is invalid
+
+    if token is None:
+        print("Token is invalid")
+        return jsonify({"error": "Token is invalid"}), 401
+
+    user_id = token_data['id']
+    user = User.query.filter_by(id=user_id).first()
+
+    # EXIT 2 : User not found
+
+    if user is None:
+        print("User not found")
+        return jsonify({"error": "User not found"})
+
+    profile = Profile.query.filter_by(user_id=user_id).first()
+
+    # EXIT 3 : Profile not found
+
+    if profile is None:
+        print("Profile not found")
+        return jsonify({"error": "Profile not found"})
+
+    # EXIT 4 : Password is incorrect
+
+    if not bcrypt.check_password_hash(user.password, password):
+        return jsonify({"error": "Password is incorrect"})
+
+    # EXIT 5 : Password not confirmed
+
+    if not password == confirmation:
+        return jsonify({"error": "Confirmation failed"})
+
+    # All checks passed: delete account
+
+    db.session.delete(user)
+    db.session.delete(profile)
+
+    db.session.commit()
+
+    return jsonify({"message": "Account deleted"})
+    # Note: Frontend should redirect to login after
 
 @app.route("/get-profile", methods=["GET"])
 def get_profile():
