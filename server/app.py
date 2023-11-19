@@ -201,25 +201,13 @@ def delete_user():
 
 @app.route("/get-profile", methods=["GET"])
 def get_profile():
-    print("Starting...")
 
-    token = request.args.get("authToken")
-    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
-
-    # print("Got token: " + token)
-
-    if token is None:
-        print("Token is invalid")
-        return jsonify({"error": "Token is invalid"}), 401
-
-    user_id = token_data['id']
-    # print("user_id" + user_id)
-
+    user_id = request.args.get('user_id')
     profile = Profile.query.filter_by(user_id=user_id).first()
 
     if profile is None:
         print("Profile does not exist")
-        return jsonify({"error": "Profile does not exist"}), 401
+        return jsonify({"error": "Profile does not exist"}), 404
 
     return jsonify({
         "user_id": profile.user_id,
