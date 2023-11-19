@@ -34,9 +34,6 @@ class Post(db.Model):
     community_id = db.Column(db.Integer, db.ForeignKey('communities.id'))
     community = relationship("Community", back_populates="posts")
 
-    # One-to-many relationship with Comment
-    # comments = relationship("Comment", back_populates="post")
-
 
 
 class Community(db.Model):
