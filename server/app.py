@@ -134,6 +134,34 @@ def register_user():
     '''
 
 
+@app.route("/add-comment", methods=["POST"])
+def add_comment():
+    # Extract data from request
+    data = request.json
+    user_id = data.get('user_id')
+    post_id = data.get('post_id')
+    comment_content = data.get('comment')
+
+    # Validate data
+    if not user_id or not post_id or not comment_content:
+        return jsonify({"error": "Missing data"}), 400
+
+    user = User.query.get(user_id)
+    post = Post.query.get(post_id)
+
+    if not user or not post:
+        return jsonify({"error": "User or Post not found"}), 404
+
+    # Create a new Comment object
+    new_comment = Comment(content=comment_content, user_id=user_id, post_id=post_id)
+
+    # Add the new comment to the database
+    db.session.add(new_comment)
+    db.session.commit()
+
+    return jsonify({"message": "Comment added successfully"}), 201
+
+
 @app.route("/user-communities/<int:user_id>", methods=["GET"])
 def get_user_communities(user_id):
     # Fetch the user by ID
@@ -336,7 +364,37 @@ def create_post():
     })
     '''
 
+@app.route("/hydration", methods=["POST"])
+def userHydration():
+    data = request.json
+    user_id = data.get("id")
+    water_consumed = data.get("waterConsumed")
 
+    if user_id is None or water_consumed is None:
+        return 'Invalid request. Please provide id and waterConsumed.', 400
+
+    user = User.query.get(user_id)
+
+    if user is None:
+        return 'User not found', 404
+
+    user.waterConsumed += water_consumed
+
+    db.session.commit()
+
+    return f'Water consumption updated for user ID: {user_id}', 200
+
+@app.route("/hydration/<int:user_id>", methods=["GET"])
+def getHydrationInfo(user_id):
+    user = User.query.get(user_id)
+
+    if user is None:
+        return 'User not found', 404
+
+    return jsonify({
+        'user_id': user.id,
+        'waterConsumed': user.waterConsumed
+    }), 200
 
 @app.route("/login", methods=["POST"])
 def login_user():

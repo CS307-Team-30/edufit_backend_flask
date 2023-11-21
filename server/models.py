@@ -21,6 +21,23 @@ user_community_association = Table('user_community', db.metadata,
 )
 
 
+class Comment(db.Model):
+    __tablename__ = 'comments'
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    
+    # Foreign key for the many-to-one relationship with Post
+    post_id = db.Column(db.Integer, db.ForeignKey('posts.id'))
+    post = relationship("Post", back_populates="comments")
+
+    # Foreign key for the many-to-one relationship with User
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user = relationship("User", back_populates="comments")
+
+
+
+
+
 class Post(db.Model):
     __tablename__ = 'posts'
     id = db.Column(db.Integer, primary_key=True)
@@ -33,6 +50,8 @@ class Post(db.Model):
     # Foreign key for the many-to-one relationship with Community
     community_id = db.Column(db.Integer, db.ForeignKey('communities.id'))
     community = relationship("Community", back_populates="posts")
+
+    comments = relationship("Comment", back_populates="post")
 
 
 
@@ -84,6 +103,12 @@ class User(db.Model):
         db.Integer,
         default=0
     )
+    waterConsumed = db.Column(
+        db.Integer,
+        default=0
+    )
+
+    comments = relationship("Comment", back_populates="user")
 
 
     posts = relationship("Post", back_populates="user")
