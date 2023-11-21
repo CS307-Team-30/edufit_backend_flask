@@ -117,7 +117,38 @@ class Profile(db.Model):
     last_changed = db.Column(
         db.DateTime
     )
-    
+
+class Goal(db.Model):
+    __tablename__ = "goals"
+    goal_id = db.Column(
+        db.String(32),
+        primary_key=True,
+        unique=True,
+        default=get_uuid
+    )
+    goal_type = db.Column(
+        db.String(32),
+        nullable=False,
+        default="Goal"
+    )
+    name = db.Column(
+        db.String(350),
+        nullable=False,
+        default="Unnamed Goal / Milestone"
+    )
+    pounds = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0
+    )
+    date = db.Column(
+        db.DateTime
+    )
+    description = db.Column(
+        db.String(350),
+        nullable=False,
+        default="Good luck!"
+    )
 
 class Message(db.Model):
     __tablename__ = "messages"
@@ -147,6 +178,8 @@ class Message(db.Model):
         db.Boolean,
         default=False
     )
+
+
 
 
 
