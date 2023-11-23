@@ -108,6 +108,7 @@ class Profile(db.Model):
     )
     profile_pic = db.Column(
         db.Text,
+        default="user_icon.jpg",
         nullable=True
     )
     visibility = db.Column(

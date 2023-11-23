@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session, make_response
+from flask import Flask, request, jsonify, session, make_response, redirect, url_for, send_from_directory
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS, cross_origin
 from flask_session import Session
@@ -15,6 +15,9 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config.from_object(ApplicationConfig)
+
+UPLOAD_FOLDER = 'images'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 secret_key = "this_is_a_key"
 
@@ -114,6 +117,10 @@ def register_user():
     hashed_password = bcrypt.generate_password_hash(password)
     new_user = User(username=username, email=email, password=hashed_password)
     db.session.add(new_user)
+
+    db.session.commit()
+
+    print("new user id: " + new_user.id)
     
     new_profile = Profile(user_id=new_user.id, nickname=new_user.username)
     db.session.add(new_profile)
@@ -145,6 +152,112 @@ def register_user():
     })
     '''
 
+@app.route("/change-password", methods=["POST"])
+def change_password():
+
+    '''
+    body:
+    {
+        "authToken": <token>,
+        "password": <new password again>
+        "confirmation": <password again>
+    }
+    '''
+
+    token = request.args.get("authToken")
+    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
+
+    password = request.json["password"]
+    confirmation = request.json["confirmation"]
+
+    # EXIT 1 : Token is invalid
+
+    if token is None:
+        print("Token is invalid")
+        return jsonify({"error": "Token is invalid"}), 401
+
+    user_id = token_data['id']
+    user = User.query.filter_by(id=user_id).first()
+
+    # EXIT 2 : User not found
+
+    if user is None:
+        print("User not found")
+        return jsonify({"error": "User not found"})
+
+    # EXIT 3 : Password not confirmed
+
+    if not password == confirmation:
+        return jsonify({"error": "Confirmation failed"})
+
+    # All checks passed: change password
+
+    hashed_password = bcrypt.generate_password_hash(password)
+    user.password = hashed_password
+    db.session.commit()
+
+    return jsonify({"msg": "Password change successful"})
+
+@app.route("/delete-user", methods=["POST"])
+def delete_user():
+
+    '''
+    body:
+    {
+        "authToken": <token>,
+        "password": <user password again>
+        "confirmation": <password again>
+    }
+    '''
+
+    token = request.args.get("authToken")
+    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
+
+    password = request.json["password"]
+    confirmation = request.json["confirmation"]
+
+    # EXIT 1 : Token is invalid
+
+    if token is None:
+        print("Token is invalid")
+        return jsonify({"error": "Token is invalid"}), 401
+
+    user_id = token_data['id']
+    user = User.query.filter_by(id=user_id).first()
+
+    # EXIT 2 : User not found
+
+    if user is None:
+        print("User not found")
+        return jsonify({"error": "User not found"})
+
+    profile = Profile.query.filter_by(user_id=user_id).first()
+
+    # EXIT 3 : Profile not found
+
+    if profile is None:
+        print("Profile not found")
+        return jsonify({"error": "Profile not found"})
+
+    # EXIT 4 : Password is incorrect
+
+    if not bcrypt.check_password_hash(user.password, password):
+        return jsonify({"error": "Password is incorrect"})
+
+    # EXIT 5 : Password not confirmed
+
+    if not password == confirmation:
+        return jsonify({"error": "Confirmation failed"})
+
+    # All checks passed: delete account
+
+    db.session.delete(user)
+    db.session.delete(profile)
+
+    db.session.commit()
+
+    return jsonify({"message": "Account deleted"})
+    # Note: Frontend should redirect to login after
 
 @app.route("/user-communities/<int:user_id>", methods=["GET"])
 def get_user_communities(user_id):
@@ -356,7 +469,6 @@ def login_user():
     password = request.json["password"]
 
     user = User.query.filter_by(username=username).first()
-    print(user.id)
 
     if user is None:
         return jsonify({"error": "User does not exist"}), 401
@@ -381,28 +493,14 @@ def login_user():
         "token": token
     })
 
-@app.route("/get-profile", methods=["GET"])
-def get_profile():
-    print("Starting...")
+@app.route("/get-profile/<string:user_id>", methods=["GET"])
+def get_profile(user_id):
 
-    token = request.args.get("authToken")
-    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
-
-    # print("Got token: " + token)
-
-    if token is None:
-        print("Token is invalid")
-        return jsonify({"error": "Token is invalid"}), 401
-
-    user_id = token_data['id']
-    # print("user_id" + user_id)
-
-    user_id = request.args.get('user_id')
+    print("Getting profile of user_id: " + user_id)
     profile = Profile.query.filter_by(user_id=user_id).first()
 
     if profile is None:
         print("Profile does not exist")
-        return jsonify({"error": "Profile does not exist"}), 401
         return jsonify({"error": "Profile does not exist"}), 404
 
     return jsonify({
@@ -412,7 +510,7 @@ def get_profile():
         "profile_pic": profile.profile_pic
     })
 
-@app.route("/update_profile", methods=["POST"])
+@app.route("/update-profile", methods=["POST"])
 def update_profile():
 
     user_data = decode_token(request.json["token"])
@@ -546,22 +644,25 @@ def get_messages():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/all-communities", methods=["GET"])
-def get_communities():
-    communities = Community.query.all()
+@app.route('/upload-image', methods=['POST'])
+def upload_image():
+    if 'file' not in request.files:
+        return 'No file part'
 
-    # Convert the community objects to a list of dictionaries
-    communities_list = [{'id': community.id, 'name': community.name, 'description': community.description} for community in communities]
+    file = request.files['file']
 
-    # Return the list as JSON
+    if file.filename == '':
+        return 'No selected file'
 
-    try:
-        return jsonify(communities_list)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+    file.save(filename)
+
+    return 'File uploaded successfully'
 
 
-
+@app.route('/images/<filename>')
+def get_image(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route("/logout", methods=["POST"])
 def logout_user():
