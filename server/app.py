@@ -190,6 +190,11 @@ def change_password():
     if not password == confirmation:
         return jsonify({"error": "Confirmation failed"})
 
+    # EXIT 4 : Password cannot be same one as before
+
+    if bcrypt.check_password_hash(user.password, password):
+        return jsonify({"error": "Password is the same as before"})
+
     # All checks passed: change password
 
     hashed_password = bcrypt.generate_password_hash(password)
@@ -204,25 +209,26 @@ def delete_user():
     '''
     body:
     {
-        "authToken": <token>,
+        "user_id": <id of current user> replace with token later?,
         "password": <user password again>
-        "confirmation": <password again>
     }
     '''
 
-    token = request.args.get("authToken")
-    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
-
+    # token = request.args.get("authToken")
+    user_id = request.json["user_id"]
     password = request.json["password"]
-    confirmation = request.json["confirmation"]
 
+    '''
     # EXIT 1 : Token is invalid
 
     if token is None:
         print("Token is invalid")
         return jsonify({"error": "Token is invalid"}), 401
 
+    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
     user_id = token_data['id']
+    '''
+    
     user = User.query.filter_by(id=user_id).first()
 
     # EXIT 2 : User not found
@@ -243,11 +249,6 @@ def delete_user():
 
     if not bcrypt.check_password_hash(user.password, password):
         return jsonify({"error": "Password is incorrect"})
-
-    # EXIT 5 : Password not confirmed
-
-    if not password == confirmation:
-        return jsonify({"error": "Confirmation failed"})
 
     # All checks passed: delete account
 
