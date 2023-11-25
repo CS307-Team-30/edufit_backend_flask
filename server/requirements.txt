@@ -7,3 +7,4 @@ redis
 flask-cors
 PyJWT
 Flask-TinyMCE
+flask-socketio

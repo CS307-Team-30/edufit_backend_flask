@@ -1,9 +1,10 @@
+from flask_socketio import SocketIO, emit, send
 from flask import Flask, request, jsonify, session, make_response
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS, cross_origin
 from flask_session import Session
 from config import ApplicationConfig
-from models import Community, Post, db, User, Comment, Instructor
+from models import Chatbox, Community, Message, Post, db, User, Comment, Instructor, user_chatbox_association
 from functools import wraps
 from dotenv import load_dotenv
 
@@ -15,6 +16,7 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config.from_object(ApplicationConfig)
+socketio = SocketIO(app,cors_allowed_origins="*")
 
 secret_key = "this_is_a_key"
 
@@ -25,12 +27,36 @@ server_session = Session(app)
 
 db.init_app(app)
 
-dummy_posts = [
-    {"title": "Dummy Post 1", "content": "Content of dummy post 1", "user_id": 1, "community_id": 1},
-    {"title": "Dummy Post 2", "content": "Content of dummy post 2", "user_id": 1, "community_id": 1},
-    # Add more dummy posts as needed
-]
+with app.app_context():
+    # Ensure all tables are created
+    db.create_all()
+    instructor1 = Instructor(name="John Doe", email="john@example.com", bio="Expert in Programming")
+    instructor2 = Instructor(name="Jane Smith", email="jane@example.com", bio="Data Science Specialist")
 
+    # Add instructors to the session
+    db.session.add(instructor1)
+    db.session.add(instructor2)
+
+    # Create two communities
+    community1 = Community(name="CS10100", description="Learn the basics of programming.")
+    community2 = Community(name="CS20100", description="Advanced concepts in programming.")
+    db.session.add(community1)
+    db.session.add(community2)
+
+    community1.instructors.append(instructor1)
+    community2.instructors.append(instructor1)
+    community2.instructors.append(instructor2)
+
+    # Commit to save instructors and communities
+    community1 = Community.query.filter_by(name="CS10100").first()
+    community2 = Community.query.filter_by(name="CS20100").first()
+
+    if community1 and community2:
+        # Make community1 a prerequisite for community2
+        community2.prerequisites.append(community1)
+
+        db.session.commit()
+    db.session.commit()
 
 
 def token_required(f):
@@ -391,7 +417,7 @@ def get_community_posts(community_id):
         user = User.query.get(post.user_id)
         upvote_ids = [u.id for u in post.upvoted_by]
         downvote_ids = [u.id for u in post.downvoted_by]
-
+        community = Community.query.get(post.community_id)
         post_details = {
             'id': post.id,
             'title': post.title,
@@ -399,6 +425,10 @@ def get_community_posts(community_id):
             'author': {
                 'id': user.id,
                 'username': user.username
+            },
+            'community': {
+                'id': community.id,
+                'name': community.name
             },
             'upvotes': upvote_ids,  # List of user IDs who upvoted
             'downvotes': downvote_ids,
@@ -412,12 +442,19 @@ def get_community_posts(community_id):
     } for prereq in community.prerequisites]
 
     # Prepare instructors list
-    instructors_list = [{
-        'id': instructor.id,
-        'name': instructor.name,
-        'email': instructor.email,
-        'bio': instructor.bio
-    } for instructor in community.instructors]
+    instructors_list = []
+    for instructor in community.instructors:
+        # Fetch the communities (courses) taught by the instructor
+        taught_courses = [{'id': course.id, 'name': course.name} for course in instructor.communities]
+
+        instructor_details = {
+            'id': instructor.id,
+            'name': instructor.name,
+            'email': instructor.email,
+            'bio': instructor.bio,
+            'courses': taught_courses  # Add the taught courses here
+        }
+        instructors_list.append(instructor_details)
 
     # Construct the final response
     response = {
@@ -462,28 +499,6 @@ def create_post():
     return jsonify({"message": "Post created successfully"}), 201
 
 
-    # token = jwt.encode(
-    #     {
-    #         "id": user.id,
-    #         "username": user.username,
-    #         "email": user.email,
-    #         'exp' : datetime.datetime.utcnow() + datetime.timedelta(hours=3)
-    #     },
-    #     secret_key,
-    #     algorithm="HS256"
-    # )
-
-    # return jsonify({
-    #     "token": token
-    # })
-
-    '''
-    return jsonify({
-        "id": user.id,
-        "username": user.username,
-        "email": user.email
-    })
-    '''
 
 @app.route("/hydration", methods=["POST"])
 def userHydration():
@@ -548,13 +563,7 @@ def login_user():
         "token": token
     })
 
-    '''
-    return jsonify({
-        "id": user.id,
-        "username": user.username,
-        "email": user.email
-    })
-    '''
+
 @app.route("/create-community", methods=["POST"])
 def create_community():
     # Retrieve data from the POST request
@@ -583,14 +592,28 @@ def get_communities():
     communities = Community.query.all()
 
     # Convert the community objects to a list of dictionaries
-    communities_list = [{'id': community.id, 'name': community.name, 'description': community.description} for community in communities]
+    communities_list = []
+    for community in communities:
+        # Fetch prerequisites and instructors for each community
+        prerequisites_list = [{'id': prereq.id, 'name': prereq.name} for prereq in community.prerequisites]
+        instructors_list = [{'id': instructor.id, 'name': instructor.name, 'email': instructor.email, 'bio': instructor.bio} for instructor in community.instructors]
+
+        # Add community details along with prerequisites and instructors
+        community_details = {
+            'id': community.id,
+            'name': community.name,
+            'description': community.description,
+            'prerequisites': prerequisites_list,
+            'instructors': instructors_list
+        }
+        communities_list.append(community_details)
 
     # Return the list as JSON
-
     try:
         return jsonify(communities_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 @app.route("/logout", methods=["POST"])
@@ -598,12 +621,145 @@ def logout_user():
     # session.pop("user_id")
     return "200"
 
+@socketio.on("message")
+def handleMessage(msg):
+    print(msg)
+    send(msg, broadcast=True)
+    return None
 
+
+
+
+@socketio.on('send_message')
+def handle_send_message(data):
+    try:
+        user_id = data['user_id']
+        chatbox_id = data['chatbox_id']
+        message_content = data['message']
+
+        # Create a new message instance
+        new_message = Message(user_id=user_id, chatbox_id=chatbox_id, content=message_content)
+        
+        # Add the new message to the database
+        db.session.add(new_message)
+        db.session.commit()
+
+        # Fetch the user to include user details in the message data
+        user = User.query.get(user_id)
+
+        # Prepare message data to send back to clients
+        message_data = {
+            'user_id': user_id,
+            'chatbox_id': chatbox_id,
+            'content': message_content,
+            'timestamp': new_message.timestamp.isoformat(),  # Send timestamp as ISO format string
+            'username': user.username if user else 'Unknown User'
+        }
+
+        # Emit the message to all clients connected to this chatbox
+        emit('new_message', message_data, to=str(chatbox_id))  # Ensure chatbox_id is a string if it's used as a room name
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        emit('error', {'message': 'Error in sending message'})
+
+
+
+@app.route("/user-chatboxes/<int:user_id>", methods=["GET"])
+def get_user_chatboxes(user_id):
+    # Fetch the user by ID
+    user = User.query.get(user_id)
+
+    # Check if the user exists
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    # Get all chatboxes the user is associated with
+    user_chatboxes = user.chatboxes
+
+    chatboxes_list = []
+    for chatbox in user_chatboxes:
+        # Find the other user in the chatbox
+        other_user = next(u for u in chatbox.users if u.id != user_id)
+
+        # Find the last message in the chatbox (if any)
+        last_message = Message.query.filter_by(chatbox_id=chatbox.id).order_by(Message.timestamp.desc()).first()
+        last_message_content = last_message.content if last_message else None
+
+        chatbox_details = {
+            'chatbox_id': chatbox.id,
+            'other_user_username': other_user.username,
+            'last_message': last_message_content,
+        }
+        chatboxes_list.append(chatbox_details)
+
+    # Return the list as JSON
+    return jsonify(chatboxes_list), 200
+
+
+@app.route("/messages/<int:chatbox_id>", methods=["GET"])
+def get_chatbox_messages(chatbox_id):
+    try:
+        # Query for messages in the chatbox
+        messages = Message.query.filter_by(chatbox_id=chatbox_id).order_by(Message.timestamp).all()
+
+        # Transform messages into a JSON-friendly format
+        messages_list = [{
+            'id': message.id,
+            'user_id': message.user_id,
+            'chatbox_id': message.chatbox_id,
+            'content': message.content,
+            'timestamp': message.timestamp.isoformat()  # Convert datetime to string
+        } for message in messages]
+
+        return jsonify(messages_list), 200
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return jsonify({"error": "Error fetching messages"}), 500
+
+
+@app.route("/check-create-chatbox", methods=["POST"])
+def check_or_create_chatbox():
+    data = request.json
+    user1_id = data['user1_id']
+    user2_id = data['user2_id']
+
+    # Aliases for user_chatbox_association table
+    uca1 = user_chatbox_association.alias()
+    uca2 = user_chatbox_association.alias()
+
+    # Query to find existing chatbox between these two users
+    existing_chatbox = Chatbox.query \
+        .join(uca1, Chatbox.id == uca1.c.chatbox_id) \
+        .filter(uca1.c.user_id == user1_id) \
+        .join(uca2, Chatbox.id == uca2.c.chatbox_id) \
+        .filter(uca2.c.user_id == user2_id) \
+        .first()
+
+    if existing_chatbox:
+        # Chatbox already exists
+        chatbox_id = existing_chatbox.id
+    else:
+        # Create a new Chatbox
+        new_chatbox = Chatbox()
+        db.session.add(new_chatbox)
+        db.session.commit()
+
+        # Associate users with the new chatbox
+        association1 = user_chatbox_association.insert().values(user_id=user1_id, chatbox_id=new_chatbox.id)
+        association2 = user_chatbox_association.insert().values(user_id=user2_id, chatbox_id=new_chatbox.id)
+        db.session.execute(association1)
+        db.session.execute(association2)
+        db.session.commit()
+
+        chatbox_id = new_chatbox.id
+
+    # Return chatbox information
+    return jsonify({"chatbox_id": chatbox_id}), 200
 
 
 if __name__ == "__main__":
-    with app.app_context():
-        # Ensure all tables are created
-        db.create_all()
+
     # Start the Flask application
-    app.run(port=8000, debug=True)
+    socketio.run(app, port=8000)

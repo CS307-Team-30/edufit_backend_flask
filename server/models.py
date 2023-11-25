@@ -3,9 +3,9 @@ from uuid import uuid4
 from sqlalchemy import Table, create_engine, Column, Integer, String, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
-
+from datetime import datetime
 import jwt
-import datetime
+
 
 Base = declarative_base()
 
@@ -14,6 +14,11 @@ db = SQLAlchemy()
 def get_uuid():
     return uuid4().int
 
+
+community_prerequisite_association = Table('community_prerequisite', db.metadata,
+    Column('community_id', Integer, ForeignKey('communities.id'), primary_key=True),
+    Column('prerequisite_id', Integer, ForeignKey('communities.id'), primary_key=True)
+)
 
 instructor_community_association = Table('instructor_community', db.metadata,
     Column('instructor_id', Integer, ForeignKey('instructors.id'), primary_key=True),
@@ -45,6 +50,40 @@ comment_downvote_association = Table('comment_downvotes', db.metadata,
     Column('user_id', Integer, ForeignKey('users.id')),
     Column('comment_id', Integer, ForeignKey('comments.id'))
 )
+
+
+# Association table for the many-to-many relationship between Users and Chatboxes
+user_chatbox_association = Table('user_chatbox', db.metadata,
+    Column('user_id', Integer, ForeignKey('users.id'), primary_key=True),
+    Column('chatbox_id', Integer, ForeignKey('chatboxes.id'), primary_key=True)
+)
+
+class Message(db.Model):
+    __tablename__ = 'messages'
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Foreign key for the many-to-one relationship with User
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user = db.relationship("User", backref="messages")
+
+    # Foreign key for the many-to-one relationship with Chatbox
+    chatbox_id = db.Column(db.Integer, db.ForeignKey('chatboxes.id'))
+    chatbox = db.relationship("Chatbox", back_populates="messages")
+
+
+
+class Chatbox(db.Model):
+    __tablename__ = 'chatboxes'
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # Relationship with Message
+    messages = db.relationship("Message", back_populates="chatbox")
+
+    # Relationship with User
+    users = db.relationship("User", secondary=user_chatbox_association, back_populates='chatboxes')
+
 
 
 class Comment(db.Model):
@@ -112,9 +151,11 @@ class Community(db.Model):
     prerequisite_id = db.Column(db.Integer, db.ForeignKey('communities.id'))
 
     # Define the relationship (self-referential)
-    prerequisites = db.relationship('Community', 
-                                    backref=db.backref('prerequisite', remote_side=[id]),
-                                    lazy='dynamic')
+    prerequisites = db.relationship('Community',
+                                     secondary=community_prerequisite_association,
+                                     primaryjoin=id==community_prerequisite_association.c.community_id,
+                                     secondaryjoin=id==community_prerequisite_association.c.prerequisite_id,
+                                     backref="prerequisite_for")
 
 
 class User(db.Model):
@@ -161,5 +202,5 @@ class User(db.Model):
 
     comments = relationship("Comment", back_populates="user")
 
-
+    chatboxes = db.relationship("Chatbox", secondary=user_chatbox_association, back_populates="users")
     posts = relationship("Post", back_populates="user")
