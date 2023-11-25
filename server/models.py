@@ -73,6 +73,71 @@ class Message(db.Model):
     chatbox = db.relationship("Chatbox", back_populates="messages")
 
 
+class Profile(db.Model):
+    __tablename__ = "profiles"
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+        unique=True,
+    )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('users.id'),
+        nullable=False
+    )
+    nickname = db.Column(
+        db.String(345),
+        nullable=False
+    )
+    bio = db.Column(
+        db.Text,
+        default="Hello, I am proud member of EduFit!"
+    )
+    profile_pic = db.Column(
+        db.Text,
+        default="user_icon.jpg",
+        nullable=True
+    )
+    visibility = db.Column(
+        db.Boolean,
+        default=True
+    )
+    last_changed = db.Column(
+        db.DateTime
+    )
+
+class Goal(db.Model):
+    __tablename__ = "goals"
+    goal_id = db.Column(
+        db.String(32),
+        primary_key=True,
+        unique=True,
+        default=get_uuid
+    )
+    goal_type = db.Column(
+        db.String(32),
+        nullable=False,
+        default="Goal"
+    )
+    name = db.Column(
+        db.String(350),
+        nullable=False,
+        default="Unnamed Goal / Milestone"
+    )
+    pounds = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0
+    )
+    date = db.Column(
+        db.DateTime
+    )
+    description = db.Column(
+        db.String(350),
+        nullable=False,
+        default="Good luck!"
+    )
+
 
 class Chatbox(db.Model):
     __tablename__ = 'chatboxes'

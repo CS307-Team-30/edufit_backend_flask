@@ -1,10 +1,10 @@
 from flask_socketio import SocketIO, emit, send
-from flask import Flask, request, jsonify, session, make_response
+from flask import Flask, request, jsonify, send_from_directory, session, make_response
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS, cross_origin
 from flask_session import Session
 from config import ApplicationConfig
-from models import Chatbox, Community, Message, Post, db, User, Comment, Instructor, user_chatbox_association
+from models import Chatbox, Community, Message, Post, Profile, db, User, Comment, Instructor, user_chatbox_association
 from functools import wraps
 from dotenv import load_dotenv
 
@@ -18,6 +18,10 @@ app = Flask(__name__)
 app.config.from_object(ApplicationConfig)
 socketio = SocketIO(app,cors_allowed_origins="*")
 
+UPLOAD_FOLDER = 'images'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+
 secret_key = "this_is_a_key"
 
 bcrypt = Bcrypt(app)
@@ -30,33 +34,33 @@ db.init_app(app)
 with app.app_context():
     # Ensure all tables are created
     db.create_all()
-    instructor1 = Instructor(name="John Doe", email="john@example.com", bio="Expert in Programming")
-    instructor2 = Instructor(name="Jane Smith", email="jane@example.com", bio="Data Science Specialist")
+    # instructor1 = Instructor(name="John Doe", email="john@example.com", bio="Expert in Programming")
+    # instructor2 = Instructor(name="Jane Smith", email="jane@example.com", bio="Data Science Specialist")
 
-    # Add instructors to the session
-    db.session.add(instructor1)
-    db.session.add(instructor2)
+    # # Add instructors to the session
+    # db.session.add(instructor1)
+    # db.session.add(instructor2)
 
-    # Create two communities
-    community1 = Community(name="CS10100", description="Learn the basics of programming.")
-    community2 = Community(name="CS20100", description="Advanced concepts in programming.")
-    db.session.add(community1)
-    db.session.add(community2)
+    # # Create two communities
+    # community1 = Community(name="CS10100", description="Learn the basics of programming.")
+    # community2 = Community(name="CS20100", description="Advanced concepts in programming.")
+    # db.session.add(community1)
+    # db.session.add(community2)
 
-    community1.instructors.append(instructor1)
-    community2.instructors.append(instructor1)
-    community2.instructors.append(instructor2)
+    # community1.instructors.append(instructor1)
+    # community2.instructors.append(instructor1)
+    # community2.instructors.append(instructor2)
 
-    # Commit to save instructors and communities
-    community1 = Community.query.filter_by(name="CS10100").first()
-    community2 = Community.query.filter_by(name="CS20100").first()
+    # # Commit to save instructors and communities
+    # community1 = Community.query.filter_by(name="CS10100").first()
+    # community2 = Community.query.filter_by(name="CS20100").first()
 
-    if community1 and community2:
-        # Make community1 a prerequisite for community2
-        community2.prerequisites.append(community1)
+    # if community1 and community2:
+    #     # Make community1 a prerequisite for community2
+    #     community2.prerequisites.append(community1)
 
-        db.session.commit()
-    db.session.commit()
+    #     db.session.commit()
+    # db.session.commit()
 
 
 def token_required(f):
@@ -106,7 +110,6 @@ def get_current_user():
 
 
 
-
 @app.route("/register", methods=["POST"])
 def register_user():
     username = request.json["username"]
@@ -124,6 +127,14 @@ def register_user():
     hashed_password = bcrypt.generate_password_hash(password)
     new_user = User(username=username, email=email, password=hashed_password)
     db.session.add(new_user)
+
+    db.session.commit()
+
+    # print("new user id: " + new_user.id)
+    
+    new_profile = Profile(user_id=new_user.id, nickname=new_user.username)
+    db.session.add(new_profile)
+
     db.session.commit()
     
     # session["user_id"] = new_user.id
@@ -150,6 +161,58 @@ def register_user():
         "email": new_user.email
     })
     '''
+
+
+@app.route("/change-password", methods=["POST"])
+def change_password():
+
+    '''
+    body:
+    {
+        "authToken": <token>,
+        "password": <new password again>
+        "confirmation": <password again>
+    }
+    '''
+
+    token = request.args.get("authToken")
+    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
+
+    password = request.json["password"]
+    confirmation = request.json["confirmation"]
+
+    # EXIT 1 : Token is invalid
+
+    if token is None:
+        print("Token is invalid")
+        return jsonify({"error": "Token is invalid"}), 401
+
+    user_id = token_data['id']
+    user = User.query.filter_by(id=user_id).first()
+
+    # EXIT 2 : User not found
+
+    if user is None:
+        print("User not found")
+        return jsonify({"error": "User not found"})
+
+    # EXIT 3 : Password not confirmed
+
+    if not password == confirmation:
+        return jsonify({"error": "Confirmation failed"})
+
+    # EXIT 4 : Password cannot be same one as before
+
+    if bcrypt.check_password_hash(user.password, password):
+        return jsonify({"error": "Password is the same as before"})
+
+    # All checks passed: change password
+
+    hashed_password = bcrypt.generate_password_hash(password)
+    user.password = hashed_password
+    db.session.commit()
+
+    return jsonify({"msg": "Password change successful"})
 
 
 @app.route("/add-comment", methods=["POST"])
@@ -563,6 +626,142 @@ def login_user():
         "token": token
     })
 
+@app.route("/get-profile/<string:user_id>", methods=["GET"])
+def get_profile(user_id):
+
+    print("Getting profile of user_id: " + user_id)
+    profile = Profile.query.filter_by(user_id=user_id).first()
+
+    if profile is None:
+        print("Profile does not exist")
+        return jsonify({"error": "Profile does not exist"}), 404
+
+    return jsonify({
+        "user_id": profile.user_id,
+        "nickname": profile.nickname,
+        "bio": profile.bio,
+        "profile_pic": profile.profile_pic
+    })
+
+@app.route("/update-profile", methods=["POST"])
+def update_profile():
+
+    user_data = decode_token(request.json["token"])
+
+    if user_data is None:
+        return jsonify({"error": "Token is invalid"}), 400
+    
+    profile = Profile.query.filter_by(user_id=user_data[id]).first()
+
+    if profile is None:
+        return jsonify({"error": "No profile found"}), 400
+
+    new_nickname = request.json["nickname"]
+    new_bio = request.json["bio"]
+    new_profile_pic = request.json["profile_pic"]
+
+    if new_nickname:
+        profile.nickname = new_nickname
+
+    if new_bio:
+        profile.bio = new_bio
+
+    if new_profile_pic:
+        profile.profile_pic = new_profile_pic
+
+    return "200"
+    '''
+    return jsonify({
+        "id": user.id,
+        "username": user.username,
+        "email": user.email
+    })
+    '''
+
+
+@app.route('/upload-image', methods=['POST'])
+def upload_image():
+    if 'file' not in request.files:
+        return 'No file part'
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return 'No selected file'
+
+    filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+    file.save(filename)
+
+    return 'File uploaded successfully'
+
+
+@app.route('/images/<filename>')
+def get_image(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route("/logout", methods=["POST"])
+def logout_user():
+    # session.pop("user_id")
+    return "200"
+
+
+@app.route("/delete-user", methods=["POST"])
+def delete_user():
+
+    '''
+    body:
+    {
+        "user_id": <id of current user> replace with token later?,
+        "password": <user password again>
+    }
+    '''
+
+    # token = request.args.get("authToken")
+    user_id = request.json["user_id"]
+    password = request.json["password"]
+
+    '''
+    # EXIT 1 : Token is invalid
+
+    if token is None:
+        print("Token is invalid")
+        return jsonify({"error": "Token is invalid"}), 401
+
+    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
+    user_id = token_data['id']
+    '''
+    
+    user = User.query.filter_by(id=user_id).first()
+
+    # EXIT 2 : User not found
+
+    if user is None:
+        print("User not found")
+        return jsonify({"error": "User not found"})
+
+    profile = Profile.query.filter_by(user_id=user_id).first()
+
+    # EXIT 3 : Profile not found
+
+    if profile is None:
+        print("Profile not found")
+        return jsonify({"error": "Profile not found"})
+
+    # EXIT 4 : Password is incorrect
+
+    if not bcrypt.check_password_hash(user.password, password):
+        return jsonify({"error": "Password is incorrect"})
+
+    # All checks passed: delete account
+
+    db.session.delete(user)
+    db.session.delete(profile)
+
+    db.session.commit()
+
+    return jsonify({"message": "Account deleted"})
+    # Note: Frontend should redirect to login after
+
 
 @app.route("/create-community", methods=["POST"])
 def create_community():
@@ -616,10 +815,6 @@ def get_communities():
 
 
 
-@app.route("/logout", methods=["POST"])
-def logout_user():
-    # session.pop("user_id")
-    return "200"
 
 @socketio.on("message")
 def handleMessage(msg):
