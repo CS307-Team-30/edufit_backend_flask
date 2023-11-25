@@ -3,7 +3,7 @@ from flask_bcrypt import Bcrypt
 from flask_cors import CORS, cross_origin
 from flask_session import Session
 from config import ApplicationConfig
-from models import Community, Post, db, User
+from models import Community, Post, db, User, Comment, Instructor
 from functools import wraps
 from dotenv import load_dotenv
 
@@ -31,19 +31,7 @@ dummy_posts = [
     # Add more dummy posts as needed
 ]
 
-with app.app_context():
 
-
-    # Ensure all tables are created
-    db.create_all()
-
-    # Create and add dummy posts to the database
-    # for post_data in dummy_posts:
-    #     post = Post(title=post_data["title"], content=post_data["content"], user_id=post_data["user_id"], community_id=post_data["community_id"])
-    #     db.session.add(post)
-
-    # # Commit the changes to the database
-    db.session.commit()
 
 def token_required(f):
     @wraps(f)
@@ -88,6 +76,10 @@ def get_current_user():
         "username": new_user.username,
         "email": user.email
     }) 
+
+
+
+
 
 @app.route("/register", methods=["POST"])
 def register_user():
@@ -184,6 +176,102 @@ def get_user_communities(user_id):
     return jsonify(communities_list), 200
 
 
+@app.route('/get-votes', methods=['POST'])
+def get_votes():
+    data = request.json
+    post_id = data.get('post_id')
+
+    # Check if user and post exist
+    post = Post.query.get(post_id)
+    if not post:
+        return jsonify({"error": "Post not found"}), 404
+
+    # Check existing votes
+
+    return jsonify({
+        "upvotes": [user.id for user in post.upvoted_by],
+        "downvotes": [user.id for user in post.downvoted_by]
+    }), 200
+
+
+@app.route('/vote', methods=['POST'])
+def handle_vote():
+    data = request.json
+    vote_type = data.get('vote_type')  # 'upvote' or 'downvote'
+    user_id = data.get('user_id')
+    post_id = data.get('post_id')
+
+    # Check if user and post exist
+    user = User.query.get(user_id)
+    post = Post.query.get(post_id)
+    if not user or not post:
+        return jsonify({"error": "User or Post not found"}), 404
+
+    # Check existing votes
+    if user in post.upvoted_by:
+        if vote_type == 'downvote':
+            # Move from upvote to downvote
+            post.upvoted_by.remove(user)
+            post.downvoted_by.append(user)
+        else:
+            # Remove from upvote
+            post.upvoted_by.remove(user)
+
+    elif user in post.downvoted_by:
+        if vote_type == 'upvote':
+            # Move from downvote to upvote
+            post.downvoted_by.remove(user)
+            post.upvoted_by.append(user)
+        else:
+            # Remove from downvote
+            post.downvoted_by.remove(user)
+    else:
+        # New vote
+        if vote_type == 'upvote':
+            post.upvoted_by.append(user)
+        elif vote_type == 'downvote':
+            post.downvoted_by.append(user)
+
+    # Commit changes to the database
+    db.session.commit()
+
+    return jsonify({
+        "upvotes": [user.id for user in post.upvoted_by],
+        "downvotes": [user.id for user in post.downvoted_by]
+    }), 200
+
+@app.route("/get-comments", methods=["POST"])
+def get_comments():
+    post_id = request.json.get("post_id")
+
+    if not post_id:
+        return jsonify({"error": "Missing Post ID"}), 400 
+    
+    post = Post.query.get(post_id)
+
+    if not post:
+        return jsonify({"error": "Post not found!"}), 404
+    
+    comments = Comment.query.filter_by(post_id=post_id).all()
+
+    # Format the results into a list of dictionaries
+    comments_list = []
+    for comment in comments:
+        user = User.query.get(comment.user_id)
+        comment_data = {
+            'id': comment.id,
+            'content': comment.content,
+            'user_id': comment.user_id,
+            'username': user.username,
+            'post_id': comment.post_id
+        }
+        comments_list.append(comment_data)
+
+    # Return the JSON response
+    return jsonify(comments_list)
+
+
+
 @app.route("/subscribe", methods=["POST"])
 def subscribe_to_community():
     user_id = request.json.get('user_id')
@@ -222,14 +310,18 @@ def get_user_subscribed_posts(user_id):
     # Query the database to get all posts from these communities
     posts = Post.query.filter(Post.community_id.in_(subscribed_community_ids)).all()
 
+
     # Convert the posts to a list of dictionaries for JSON serialization
     posts_list = []
     for post in posts:
+        upvote_ids = [user.id for user in post.upvoted_by]
+        downvote_ids = [user.id for user in post.downvoted_by]
         # Fetch the author and community details
         author = User.query.get(post.user_id)
         community = Community.query.get(post.community_id)
 
         post_details = {
+            'id': post.id,
             'title': post.title,
             'content': post.content,
             'author': {
@@ -243,6 +335,8 @@ def get_user_subscribed_posts(user_id):
                 'name': community.name,
                 # Add other community fields as needed
             },
+            'upvotes': upvote_ids,  # List of user IDs who upvoted
+            'downvotes': downvote_ids,
             # 'comments': [
             #     {
             #         'id': comment.id,
@@ -281,15 +375,22 @@ def unsubscribe_from_community():
 
 @app.route('/community/<int:community_id>', methods=['GET'])
 def get_community_posts(community_id):
-    # Query the database to get all posts for the specified community
+    # Query the database to get the specified community
+    community = Community.query.get(community_id)
+    if not community:
+        return jsonify({"error": "Community not found"}), 404
+
+    # Query to get all posts for the specified community
     posts = Post.query.filter_by(community_id=community_id).all()
 
     # Convert the posts to a list of dictionaries for JSON serialization
     posts_list = []
+
     for post in posts:
-        # Fetch the user and community details
+        # Fetch the user details
         user = User.query.get(post.user_id)
-        community = Community.query.get(post.community_id)
+        upvote_ids = [u.id for u in post.upvoted_by]
+        downvote_ids = [u.id for u in post.downvoted_by]
 
         post_details = {
             'id': post.id,
@@ -299,15 +400,35 @@ def get_community_posts(community_id):
                 'id': user.id,
                 'username': user.username
             },
-            'community': {
-                'id': community.id,
-                'name': community.name,
-                'description': community.description
-            }
+            'upvotes': upvote_ids,  # List of user IDs who upvoted
+            'downvotes': downvote_ids,
         }
         posts_list.append(post_details)
 
-    return jsonify(posts_list)
+    # Prepare prerequisites list
+    prerequisites_list = [{
+        'id': prereq.id,
+        'name': prereq.name,
+    } for prereq in community.prerequisites]
+
+    # Prepare instructors list
+    instructors_list = [{
+        'id': instructor.id,
+        'name': instructor.name,
+        'email': instructor.email,
+        'bio': instructor.bio
+    } for instructor in community.instructors]
+
+    # Construct the final response
+    response = {
+        'description': community.description,
+        'prerequisites': prerequisites_list,
+        'instructors': instructors_list,
+        'post_list': posts_list
+    }
+
+    return jsonify(response)
+
 
 @app.route("/create-post", methods=["POST"])
 def create_post():
@@ -477,7 +598,12 @@ def logout_user():
     # session.pop("user_id")
     return "200"
 
+
+
+
 if __name__ == "__main__":
-# Creating instances of the Community class for each CS course
-    
+    with app.app_context():
+        # Ensure all tables are created
+        db.create_all()
+    # Start the Flask application
     app.run(port=8000, debug=True)

@@ -15,9 +15,35 @@ def get_uuid():
     return uuid4().int
 
 
+instructor_community_association = Table('instructor_community', db.metadata,
+    Column('instructor_id', Integer, ForeignKey('instructors.id'), primary_key=True),
+    Column('community_id', Integer, ForeignKey('communities.id'), primary_key=True)
+)
+
 user_community_association = Table('user_community', db.metadata,
     Column('user_id', Integer, ForeignKey('users.id')),
     Column('community_id', Integer, ForeignKey('communities.id'))
+)
+
+
+post_upvote_association = Table('post_upvotes', db.metadata,
+    Column('user_id', Integer, ForeignKey('users.id')),
+    Column('post_id', Integer, ForeignKey('posts.id'))
+)
+
+post_downvote_association = Table('post_downvotes', db.metadata,
+    Column('user_id', Integer, ForeignKey('users.id')),
+    Column('post_id', Integer, ForeignKey('posts.id'))
+)
+
+comment_upvote_association = Table('comment_upvotes', db.metadata,
+    Column('user_id', Integer, ForeignKey('users.id')),
+    Column('comment_id', Integer, ForeignKey('comments.id'))
+)
+
+comment_downvote_association = Table('comment_downvotes', db.metadata,
+    Column('user_id', Integer, ForeignKey('users.id')),
+    Column('comment_id', Integer, ForeignKey('comments.id'))
 )
 
 
@@ -34,7 +60,8 @@ class Comment(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     user = relationship("User", back_populates="comments")
 
-
+    upvoted_by = relationship("User", secondary=comment_upvote_association)
+    downvoted_by = relationship("User", secondary=comment_downvote_association)
 
 
 
@@ -53,6 +80,20 @@ class Post(db.Model):
 
     comments = relationship("Comment", back_populates="post")
 
+    upvoted_by = relationship("User", secondary=post_upvote_association)
+    downvoted_by = relationship("User", secondary=post_downvote_association)
+
+
+
+class Instructor(db.Model):
+    __tablename__ = "instructors"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), nullable=False, unique=True)
+    bio = db.Column(db.Text)
+
+    # Relationship - one instructor can have many communities
+    communities = db.relationship("Community", secondary=instructor_community_association, back_populates="instructors")
 
 
 class Community(db.Model):
@@ -65,6 +106,16 @@ class Community(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     
     posts = relationship("Post", back_populates="community")
+        # Add a foreign key for Instructor
+    instructors = db.relationship("Instructor", secondary=instructor_community_association, back_populates="communities")
+
+    prerequisite_id = db.Column(db.Integer, db.ForeignKey('communities.id'))
+
+    # Define the relationship (self-referential)
+    prerequisites = db.relationship('Community', 
+                                    backref=db.backref('prerequisite', remote_side=[id]),
+                                    lazy='dynamic')
+
 
 class User(db.Model):
     __tablename__ = "users"
