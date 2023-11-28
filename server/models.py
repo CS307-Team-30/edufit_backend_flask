@@ -151,10 +151,95 @@ class Goal(db.Model):
         default="Good luck!"
     )
 
-class Message(db.Model):
-    __tablename__ = "messages"
-    msg_id = db.Column(
-        db.String(32),
+
+class Chatbox(db.Model):
+    __tablename__ = 'chatboxes'
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # Relationship with Message
+    messages = db.relationship("Message", back_populates="chatbox")
+
+    # Relationship with User
+    users = db.relationship("User", secondary=user_chatbox_association, back_populates='chatboxes')
+
+
+
+class Comment(db.Model):
+    __tablename__ = 'comments'
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    
+    # Foreign key for the many-to-one relationship with Post
+    post_id = db.Column(db.Integer, db.ForeignKey('posts.id'))
+    post = relationship("Post", back_populates="comments")
+
+    # Foreign key for the many-to-one relationship with User
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user = relationship("User", back_populates="comments")
+
+    upvoted_by = relationship("User", secondary=comment_upvote_association)
+    downvoted_by = relationship("User", secondary=comment_downvote_association)
+
+
+
+class Post(db.Model):
+    __tablename__ = 'posts'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255))
+    content = db.Column(db.Text)
+    
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user = relationship("User", back_populates="posts")
+
+    # Foreign key for the many-to-one relationship with Community
+    community_id = db.Column(db.Integer, db.ForeignKey('communities.id'))
+    community = relationship("Community", back_populates="posts")
+
+    comments = relationship("Comment", back_populates="post")
+
+    upvoted_by = relationship("User", secondary=post_upvote_association)
+    downvoted_by = relationship("User", secondary=post_downvote_association)
+
+
+
+class Instructor(db.Model):
+    __tablename__ = "instructors"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), nullable=False, unique=True)
+    bio = db.Column(db.Text)
+
+    # Relationship - one instructor can have many communities
+    communities = db.relationship("Community", secondary=instructor_community_association, back_populates="instructors")
+
+
+class Community(db.Model):
+    __tablename__ = "communities"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, nullable=False)   
+    description = db.Column(db.String, nullable=False)
+
+    users = relationship("User", secondary=user_community_association, back_populates='communities')
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    
+    posts = relationship("Post", back_populates="community")
+        # Add a foreign key for Instructor
+    instructors = db.relationship("Instructor", secondary=instructor_community_association, back_populates="communities")
+
+    prerequisite_id = db.Column(db.Integer, db.ForeignKey('communities.id'))
+
+    # Define the relationship (self-referential)
+    prerequisites = db.relationship('Community',
+                                     secondary=community_prerequisite_association,
+                                     primaryjoin=id==community_prerequisite_association.c.community_id,
+                                     secondaryjoin=id==community_prerequisite_association.c.prerequisite_id,
+                                     backref="prerequisite_for")
+
+
+class User(db.Model):
+    __tablename__ = "users"
+    id = db.Column(
+        db.Integer,
         primary_key=True,
         unique=True,
         default=get_uuid
