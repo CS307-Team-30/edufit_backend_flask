@@ -175,7 +175,19 @@ def change_password():
     }
     '''
 
-    token = request.args.get("authToken")
+    @app.route("/change-password", methods=["POST"])
+def change_password():
+
+    '''
+    body:
+    {
+        "authToken": <token>,
+        "password": <new password again>
+        "confirmation": <password again>
+    }
+    '''
+
+    token = request.json["authToken"]
     token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
 
     password = request.json["password"]
@@ -207,7 +219,7 @@ def change_password():
         return jsonify({"error": "Password is the same as before"})
 
     # All checks passed: change password
-
+    
     hashed_password = bcrypt.generate_password_hash(password)
     user.password = hashed_password
     db.session.commit()
