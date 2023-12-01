@@ -40,35 +40,41 @@ server_session = Session(app)
 db.init_app(app)
 
 with app.app_context():
+
+    # LONG COMMENT HERE
+
+    '''
     # Ensure all tables are created
     db.create_all()
-    # instructor1 = Instructor(name="John Doe", email="john@example.com", bio="Expert in Programming")
-    # instructor2 = Instructor(name="Jane Smith", email="jane@example.com", bio="Data Science Specialist")
+    instructor1 = Instructor(name="John Doe", email="john@example.com", bio="Expert in Programming")
+    instructor2 = Instructor(name="Jane Smith", email="jane@example.com", bio="Data Science Specialist")
 
     # # Add instructors to the session
-    # db.session.add(instructor1)
-    # db.session.add(instructor2)
+    db.session.add(instructor1)
+    db.session.add(instructor2)
 
     # # Create two communities
-    # community1 = Community(name="CS10100", description="Learn the basics of programming.")
-    # community2 = Community(name="CS20100", description="Advanced concepts in programming.")
-    # db.session.add(community1)
-    # db.session.add(community2)
+    community1 = Community(name="CS10100", description="Learn the basics of programming.")
+    community2 = Community(name="CS20100", description="Advanced concepts in programming.")
+    db.session.add(community1)
+    db.session.add(community2)
 
-    # community1.instructors.append(instructor1)
-    # community2.instructors.append(instructor1)
-    # community2.instructors.append(instructor2)
+    community1.instructors.append(instructor1)
+    community2.instructors.append(instructor1)
+    community2.instructors.append(instructor2)
 
-    # # Commit to save instructors and communities
-    # community1 = Community.query.filter_by(name="CS10100").first()
-    # community2 = Community.query.filter_by(name="CS20100").first()
+    # Commit to save instructors and communities
+    community1 = Community.query.filter_by(name="CS10100").first()
+    community2 = Community.query.filter_by(name="CS20100").first()
 
-    # if community1 and community2:
-    #     # Make community1 a prerequisite for community2
-    #     community2.prerequisites.append(community1)
+    if community1 and community2:
+    # Make community1 a prerequisite for community2
+        community2.prerequisites.append(community1)
 
-    #     db.session.commit()
-    # db.session.commit()
+    db.session.commit()
+    '''
+
+    # LONG COMMENT END
 
 
 def token_required(f):
@@ -114,9 +120,6 @@ def get_current_user():
         "username": new_user.username,
         "email": user.email
     }) 
-
-
-
 
 @app.route("/register", methods=["POST"])
 def register_user():
@@ -678,7 +681,6 @@ def login_user():
     password = request.json["password"]
 
     user = User.query.filter_by(username=username).first()
-    print(user.id)
 
     if user is None:
         return jsonify({"error": "User does not exist."}), 401
@@ -749,48 +751,6 @@ def update_profile_pic():
     db.session.commit()
 
     return "200"
-
-
-@app.route('/upload-image', methods=['POST'])
-def upload_image():
-    if 'file' not in request.files:
-        return 'No file part'
-
-    file = request.files['file']
-
-    if file.filename == '':
-        return 'No selected file'
-
-    filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-    file.save(filename)
-
-    return 'File uploaded successfully'
-
-
-@app.route('/images/<filename>')
-def get_image(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-
-@app.route('/upload-image', methods=['POST'])
-def upload_image():
-    if 'file' not in request.files:
-        return 'No file part'
-
-    file = request.files['file']
-
-    if file.filename == '':
-        return 'No selected file'
-
-    filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-    file.save(filename)
-
-    return 'File uploaded successfully'
-
-
-@app.route('/images/<filename>')
-def get_image(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
 @app.route('/upload-image', methods=['POST'])
