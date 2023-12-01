@@ -163,19 +163,8 @@ def register_user():
     '''
 
 
+
 @app.route("/change-password", methods=["POST"])
-def change_password():
-
-    '''
-    body:
-    {
-        "authToken": <token>,
-        "password": <new password again>
-        "confirmation": <password again>
-    }
-    '''
-
-    @app.route("/change-password", methods=["POST"])
 def change_password():
 
     '''
