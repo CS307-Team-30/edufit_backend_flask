@@ -3,8 +3,9 @@ from flask import Flask, request, jsonify, send_from_directory, session, make_re
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS, cross_origin
 from flask_session import Session
+from flask_mail import Mail, Message
 from config import ApplicationConfig
-from models import Chatbox, Community, Message, Post, Profile, db, User, Comment, Instructor, user_chatbox_association
+from models import Chatbox, Community, PrivateMessage, Post, Profile, db, User, Comment, Instructor, user_chatbox_association
 from functools import wraps
 from dotenv import load_dotenv
 
@@ -21,6 +22,13 @@ socketio = SocketIO(app,cors_allowed_origins="*")
 UPLOAD_FOLDER = 'images'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+app.config['MAIL_SERVER']='smtp.gmail.com'
+app.config['MAIL_PORT'] = 465
+app.config['MAIL_USERNAME'] = 'edufitburner@gmail.com'
+app.config['MAIL_PASSWORD'] = 'ahptphuobidkszvu'
+app.config['MAIL_USE_TLS'] = False
+app.config['MAIL_USE_SSL'] = True
+mail = Mail(app)
 
 secret_key = "this_is_a_key"
 
@@ -162,8 +170,6 @@ def register_user():
     })
     '''
 
-
-
 @app.route("/change-password", methods=["POST"])
 def change_password():
 
@@ -195,17 +201,17 @@ def change_password():
 
     if user is None:
         print("User not found")
-        return jsonify({"error": "User not found"})
+        return jsonify({"error": "User not found."})
 
     # EXIT 3 : Password not confirmed
 
     if not password == confirmation:
-        return jsonify({"error": "Confirmation failed"})
+        return jsonify({"error": "Your passwords do not match!"})
 
     # EXIT 4 : Password cannot be same one as before
 
     if bcrypt.check_password_hash(user.password, password):
-        return jsonify({"error": "Password is the same as before"})
+        return jsonify({"error": "Password cannot be the same one as before."})
 
     # All checks passed: change password
     
@@ -213,8 +219,77 @@ def change_password():
     user.password = hashed_password
     db.session.commit()
 
-    return jsonify({"msg": "Password change successful"})
+    return jsonify({"msg": "Password change successful!"})
 
+@app.route("/update-bio", methods=["POST"])
+def update_bio():
+
+    '''
+    body:
+    {
+        "authToken": <token>,
+        "new_bio": <new bio>
+    }
+    '''
+
+    token = request.json["authToken"]
+    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
+
+    new_bio = request.json["new_bio"]
+
+    # EXIT 1 : Token is invalid
+
+    if token is None:
+        print("Token is invalid")
+        return jsonify({"error": "Token is invalid"}), 401
+
+    user_id = token_data['id']
+    user = User.query.filter_by(id=user_id).first()
+
+    # EXIT 2 : User not found
+
+    if user is None:
+        print("User not found")
+        return jsonify({"error": "User not found"})
+
+    # All checks passed: change bio
+    
+    user.bio = bio
+    db.session.commit()
+
+    return jsonify({"msg": "Bio change successful"})
+
+@app.route("/report-post", methods=["POST"])
+def report_post():
+
+    '''
+    {
+        authToken: [token],
+        post_id: [id of post],
+        reason: [string, inputtable]
+    }
+    '''
+
+    data = request.json
+    token = data["authToken"]
+    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
+
+    username = token_data["username"]
+    post_id = data["post_id"]
+
+    post = Post.query.get(post_id)
+    post_title = post.title
+    post_content = post.content
+
+    msg = Message(
+        subject='Post Report #' + str(post_id),
+        sender='edufitburner@gmail.com',
+        recipients=['jhcheng@purdue.edu']
+    )
+    msg.body = "A user has reported Post #" + str(post_id) + " for inappropriate content.\nReason: " + data["reason"] + "\n\n#################\n\nPost title:\n" + post_title + "\n\nPost content:\n" + post_content
+    mail.send(msg)
+
+    return "Message sent!", 200
 
 @app.route("/add-comment", methods=["POST"])
 def add_comment():
@@ -559,6 +634,7 @@ def create_post():
     # Add the new post to the database
     db.session.add(new_post)
     db.session.commit()
+    print("New post: " + str(new_post.id))
 
     return jsonify({"message": "Post created successfully"}), 201
 
@@ -605,10 +681,10 @@ def login_user():
     print(user.id)
 
     if user is None:
-        return jsonify({"error": "User does not exist"}), 401
+        return jsonify({"error": "User does not exist."}), 401
 
     if not bcrypt.check_password_hash(user.password, password):
-        return jsonify({"error": "Password is incorrect"}), 401
+        return jsonify({"error": "Password is incorrect."}), 401
     
     # session["user_id"] = user.id
 
@@ -644,40 +720,77 @@ def get_profile(user_id):
         "profile_pic": profile.profile_pic
     })
 
-@app.route("/update-profile", methods=["POST"])
-def update_profile():
+@app.route("/update-profile-pic", methods=["POST"])
+def update_profile_pic():
 
-    user_data = decode_token(request.json["token"])
+    '''
+    {
+        token = [token],
+        new_pic = [string]
+    }
+    '''
+
+    token = request.json["token"]
+    user_data = jwt.decode(token, secret_key, algorithms=["HS256"])
 
     if user_data is None:
         return jsonify({"error": "Token is invalid"}), 400
     
-    profile = Profile.query.filter_by(user_id=user_data[id]).first()
+    profile = Profile.query.filter_by(user_id=user_data['id']).first()
 
     if profile is None:
         return jsonify({"error": "No profile found"}), 400
 
-    new_nickname = request.json["nickname"]
-    new_bio = request.json["bio"]
-    new_profile_pic = request.json["profile_pic"]
-
-    if new_nickname:
-        profile.nickname = new_nickname
-
-    if new_bio:
-        profile.bio = new_bio
+    new_profile_pic = request.json["new_pic"]
 
     if new_profile_pic:
         profile.profile_pic = new_profile_pic
 
+    db.session.commit()
+
     return "200"
-    '''
-    return jsonify({
-        "id": user.id,
-        "username": user.username,
-        "email": user.email
-    })
-    '''
+
+
+@app.route('/upload-image', methods=['POST'])
+def upload_image():
+    if 'file' not in request.files:
+        return 'No file part'
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return 'No selected file'
+
+    filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+    file.save(filename)
+
+    return 'File uploaded successfully'
+
+
+@app.route('/images/<filename>')
+def get_image(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+@app.route('/upload-image', methods=['POST'])
+def upload_image():
+    if 'file' not in request.files:
+        return 'No file part'
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return 'No selected file'
+
+    filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+    file.save(filename)
+
+    return 'File uploaded successfully'
+
+
+@app.route('/images/<filename>')
+def get_image(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
 @app.route('/upload-image', methods=['POST'])
@@ -703,7 +816,7 @@ def get_image(filename):
 @app.route("/logout", methods=["POST"])
 def logout_user():
     # session.pop("user_id")
-    return "200"
+    return "200"                                               
 
 
 @app.route("/delete-user", methods=["POST"])
@@ -751,7 +864,7 @@ def delete_user():
     # EXIT 4 : Password is incorrect
 
     if not bcrypt.check_password_hash(user.password, password):
-        return jsonify({"error": "Password is incorrect"})
+        return jsonify({"error": "Your password is incorrect."})
 
     # All checks passed: delete account
 
@@ -760,7 +873,7 @@ def delete_user():
 
     db.session.commit()
 
-    return jsonify({"message": "Account deleted"})
+    return jsonify({"message": "Account deleted. Returning to homepage..."})
     # Note: Frontend should redirect to login after
 
 
@@ -834,7 +947,7 @@ def handle_send_message(data):
         message_content = data['message']
 
         # Create a new message instance
-        new_message = Message(user_id=user_id, chatbox_id=chatbox_id, content=message_content)
+        new_message = PrivateMessage(user_id=user_id, chatbox_id=chatbox_id, content=message_content)
         
         # Add the new message to the database
         db.session.add(new_message)
@@ -879,7 +992,7 @@ def get_user_chatboxes(user_id):
         other_user = next(u for u in chatbox.users if u.id != user_id)
 
         # Find the last message in the chatbox (if any)
-        last_message = Message.query.filter_by(chatbox_id=chatbox.id).order_by(Message.timestamp.desc()).first()
+        last_message = PrivateMessage.query.filter_by(chatbox_id=chatbox.id).order_by(PrivateMessage.timestamp.desc()).first()
         last_message_content = last_message.content if last_message else None
 
         chatbox_details = {
@@ -897,7 +1010,7 @@ def get_user_chatboxes(user_id):
 def get_chatbox_messages(chatbox_id):
     try:
         # Query for messages in the chatbox
-        messages = Message.query.filter_by(chatbox_id=chatbox_id).order_by(Message.timestamp).all()
+        messages = PrivateMessage.query.filter_by(chatbox_id=chatbox_id).order_by(PrivateMessage.timestamp).all()
 
         # Transform messages into a JSON-friendly format
         messages_list = [{

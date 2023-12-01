@@ -7,4 +7,5 @@ redis
 flask-cors
 PyJWT
 Flask-TinyMCE
+Flask-Mail
 flask-socketio

@@ -58,7 +58,7 @@ user_chatbox_association = Table('user_chatbox', db.metadata,
     Column('chatbox_id', Integer, ForeignKey('chatboxes.id'), primary_key=True)
 )
 
-class Message(db.Model):
+class PrivateMessage(db.Model):
     __tablename__ = 'messages'
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
@@ -144,7 +144,7 @@ class Chatbox(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     
     # Relationship with Message
-    messages = db.relationship("Message", back_populates="chatbox")
+    messages = db.relationship("PrivateMessage", back_populates="chatbox")
 
     # Relationship with User
     users = db.relationship("User", secondary=user_chatbox_association, back_populates='chatboxes')
