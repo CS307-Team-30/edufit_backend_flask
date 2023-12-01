@@ -5,7 +5,7 @@ from flask_cors import CORS, cross_origin
 from flask_session import Session
 from flask_mail import Mail, Message
 from config import ApplicationConfig
-from models import Chatbox, Community, PrivateMessage, Post, Profile, db, User, Comment, Instructor, user_chatbox_association
+from models import Chatbox, Community, GoalEntry, MilestoneEntry, PrivateMessage, Post, Profile, WeightEntry, db, User, Comment, Instructor, user_chatbox_association
 from functools import wraps
 from dotenv import load_dotenv
 
@@ -43,36 +43,35 @@ with app.app_context():
 
     # LONG COMMENT HERE
 
-    '''
+    
     # Ensure all tables are created
     db.create_all()
-    instructor1 = Instructor(name="John Doe", email="john@example.com", bio="Expert in Programming")
-    instructor2 = Instructor(name="Jane Smith", email="jane@example.com", bio="Data Science Specialist")
+    # instructor1 = Instructor(name="John Doe", email="john@example.com", bio="Expert in Programming")
+    # instructor2 = Instructor(name="Jane Smith", email="jane@example.com", bio="Data Science Specialist")
 
-    # # Add instructors to the session
-    db.session.add(instructor1)
-    db.session.add(instructor2)
+    # # # Add instructors to the session
+    # db.session.add(instructor1)
+    # db.session.add(instructor2)
 
-    # # Create two communities
-    community1 = Community(name="CS10100", description="Learn the basics of programming.")
-    community2 = Community(name="CS20100", description="Advanced concepts in programming.")
-    db.session.add(community1)
-    db.session.add(community2)
+    # # # Create two communities
+    # community1 = Community(name="CS10100", description="Learn the basics of programming.")
+    # community2 = Community(name="CS20100", description="Advanced concepts in programming.")
+    # db.session.add(community1)
+    # db.session.add(community2)
 
-    community1.instructors.append(instructor1)
-    community2.instructors.append(instructor1)
-    community2.instructors.append(instructor2)
+    # community1.instructors.append(instructor1)
+    # community2.instructors.append(instructor1)
+    # community2.instructors.append(instructor2)
 
-    # Commit to save instructors and communities
-    community1 = Community.query.filter_by(name="CS10100").first()
-    community2 = Community.query.filter_by(name="CS20100").first()
+    # # Commit to save instructors and communities
+    # community1 = Community.query.filter_by(name="CS10100").first()
+    # community2 = Community.query.filter_by(name="CS20100").first()
 
-    if community1 and community2:
-    # Make community1 a prerequisite for community2
-        community2.prerequisites.append(community1)
+    # if community1 and community2:
+    # # Make community1 a prerequisite for community2
+    #     community2.prerequisites.append(community1)
 
-    db.session.commit()
-    '''
+    # db.session.commit()
 
     # LONG COMMENT END
 
@@ -293,6 +292,99 @@ def report_post():
     mail.send(msg)
 
     return "Message sent!", 200
+
+@app.route('/user/<int:user_id>/milestone/<int:milestone_id>', methods=['DELETE'])
+def delete_milestone_entry(user_id, milestone_id):
+    milestone_entry = MilestoneEntry.query.filter_by(id=milestone_id, user_id=user_id).first()
+    if milestone_entry:
+        db.session.delete(milestone_entry)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Milestone entry deleted successfully"})
+    else:
+        return jsonify({"success": False, "message": "Milestone entry not found"}), 404
+
+
+@app.route('/user/<int:user_id>/goal/<int:goal_id>', methods=['DELETE'])
+def delete_goal_entry(user_id, goal_id):
+    goal_entry = GoalEntry.query.filter_by(id=goal_id, user_id=user_id).first()
+    if goal_entry:
+        db.session.delete(goal_entry)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Goal entry deleted successfully"})
+    else:
+        return jsonify({"success": False, "message": "Goal entry not found"}), 404
+
+
+@app.route('/user/<int:user_id>/weight', methods=['POST'])
+def add_weight_entry(user_id):
+    data = request.json
+    new_weight_entry = WeightEntry(
+        date=data['date'],
+        weight=data['weight'],
+        user_id=user_id
+    )
+    db.session.add(new_weight_entry)
+    db.session.commit()
+    return jsonify({"success": True, "message": "Weight entry added successfully"})
+
+
+@app.route('/user/<int:user_id>/weights', methods=['GET'])
+def get_weight_entries(user_id):
+    weight_entries = WeightEntry.query.filter_by(user_id=user_id).all()
+    return jsonify([
+        {"date": entry.date, "weight": entry.weight} for entry in weight_entries
+    ])
+
+@app.route('/user/<int:user_id>/goal', methods=['POST'])
+def add_goal_entry(user_id):
+    data = request.json
+    new_goal_entry = GoalEntry(
+        user_id=user_id,
+        exerciseName=data['exerciseName'],
+        targetPounds=data['targetPounds'],
+        date=data['date'],
+        description=data['description']
+    )
+    db.session.add(new_goal_entry)
+    db.session.commit()
+    return jsonify({"success": True, "message": "Goal entry added successfully"})
+
+
+
+@app.route('/user/<int:user_id>/goals', methods=['GET'])
+def get_goal_entries(user_id):
+    goal_entries = GoalEntry.query.filter_by(user_id=user_id).all()
+    return jsonify([
+        {"id": entry.id, "exerciseName": entry.exerciseName, "targetPounds": entry.targetPounds, 
+         "date": entry.date, "description": entry.description} for entry in goal_entries
+    ])
+
+
+@app.route('/user/<int:user_id>/milestone', methods=['POST'])
+def add_milestone_entry(user_id):
+    data = request.json
+    new_milestone_entry = MilestoneEntry(
+        user_id=user_id,
+        exerciseName=data['exerciseName'],
+        targetPounds=data['targetPounds'],
+        date=data['date'],
+        description=data['description']
+    )
+    db.session.add(new_milestone_entry)
+    db.session.commit()
+    return jsonify({"success": True, "message": "Milestone entry added successfully"})
+
+
+@app.route('/user/<int:user_id>/milestones', methods=['GET'])
+def get_milestone_entries(user_id):
+    milestone_entries = MilestoneEntry.query.filter_by(user_id=user_id).all()
+    return jsonify([
+        {"id": entry.id, "exerciseName": entry.exerciseName, "targetPounds": entry.targetPounds, 
+         "date": entry.date, "description": entry.description} for entry in milestone_entries
+    ])
+
+
+
 
 @app.route("/add-comment", methods=["POST"])
 def add_comment():

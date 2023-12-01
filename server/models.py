@@ -1,8 +1,8 @@
 from flask_sqlalchemy import SQLAlchemy
 from uuid import uuid4
-from sqlalchemy import Table, create_engine, Column, Integer, String, ForeignKey
+from sqlalchemy import Float, Table, create_engine, Column, Integer, String, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker, backref
 from datetime import datetime
 import jwt
 
@@ -188,6 +188,14 @@ class Post(db.Model):
     downvoted_by = relationship("User", secondary=post_downvote_association)
 
 
+class WeightEntry(db.Model):
+    __tablename__ = 'weight_entries'
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.String, nullable=False)  # Storing date as a string
+    weight = db.Column(db.Float, nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'))
+
+
 
 class Instructor(db.Model):
     __tablename__ = "instructors"
@@ -221,6 +229,27 @@ class Community(db.Model):
                                      primaryjoin=id==community_prerequisite_association.c.community_id,
                                      secondaryjoin=id==community_prerequisite_association.c.prerequisite_id,
                                      backref="prerequisite_for")
+    
+
+class GoalEntry(db.Model):
+    __tablename__ = 'goal_entries'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    exerciseName = Column(String)
+    targetPounds = Column(Float)
+    date = Column(String)
+    description = Column(String)
+    # Relationship back to user
+
+class MilestoneEntry(db.Model):
+    __tablename__ = 'milestone_entries'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    exerciseName = Column(String)
+    targetPounds = Column(Float)
+    date = Column(String)
+    description = Column(String)
+    
 
 
 class User(db.Model):
@@ -266,6 +295,10 @@ class User(db.Model):
     )
 
     comments = relationship("Comment", back_populates="user")
+
+    weight_entries = db.relationship('WeightEntry', backref='user', lazy=True)
+    goal_entries = db.relationship('GoalEntry', backref='user', lazy=True)
+    milestone_entries = db.relationship('MilestoneEntry', backref='user', lazy=True)
 
     chatboxes = db.relationship("Chatbox", secondary=user_chatbox_association, back_populates="users")
     posts = relationship("Post", back_populates="user")
