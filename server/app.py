@@ -684,10 +684,10 @@ def login_user():
     user = User.query.filter_by(username=username).first()
 
     if user is None:
-        return jsonify({"error": "User does not exist"}), 401
+        return jsonify({"error": "User does not exist."}), 401
 
     if not bcrypt.check_password_hash(user.password, password):
-        return jsonify({"error": "Password is incorrect"}), 401
+        return jsonify({"error": "Password is incorrect."}), 401
     
     # session["user_id"] = user.id
 
@@ -825,7 +825,7 @@ def delete_user():
     # EXIT 4 : Password is incorrect
 
     if not bcrypt.check_password_hash(user.password, password):
-        return jsonify({"error": "Password is incorrect"})
+        return jsonify({"error": "Your password is incorrect."})
 
     # All checks passed: delete account
 
@@ -834,7 +834,7 @@ def delete_user():
 
     db.session.commit()
 
-    return jsonify({"message": "Account deleted"})
+    return jsonify({"message": "Account deleted. Returning to homepage..."})
     # Note: Frontend should redirect to login after
 
 
