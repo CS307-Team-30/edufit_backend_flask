@@ -40,35 +40,39 @@ server_session = Session(app)
 db.init_app(app)
 
 with app.app_context():
+
+    # LONG COMMENT HERE
+
     # Ensure all tables are created
     db.create_all()
-    # instructor1 = Instructor(name="John Doe", email="john@example.com", bio="Expert in Programming")
-    # instructor2 = Instructor(name="Jane Smith", email="jane@example.com", bio="Data Science Specialist")
+    instructor1 = Instructor(name="John Doe", email="john@example.com", bio="Expert in Programming")
+    instructor2 = Instructor(name="Jane Smith", email="jane@example.com", bio="Data Science Specialist")
 
     # # Add instructors to the session
-    # db.session.add(instructor1)
-    # db.session.add(instructor2)
+    db.session.add(instructor1)
+    db.session.add(instructor2)
 
     # # Create two communities
-    # community1 = Community(name="CS10100", description="Learn the basics of programming.")
-    # community2 = Community(name="CS20100", description="Advanced concepts in programming.")
-    # db.session.add(community1)
-    # db.session.add(community2)
+    community1 = Community(name="CS10100", description="Learn the basics of programming.")
+    community2 = Community(name="CS20100", description="Advanced concepts in programming.")
+    db.session.add(community1)
+    db.session.add(community2)
 
-    # community1.instructors.append(instructor1)
-    # community2.instructors.append(instructor1)
-    # community2.instructors.append(instructor2)
+    community1.instructors.append(instructor1)
+    community2.instructors.append(instructor1)
+    community2.instructors.append(instructor2)
 
-    # # Commit to save instructors and communities
-    # community1 = Community.query.filter_by(name="CS10100").first()
-    # community2 = Community.query.filter_by(name="CS20100").first()
+    # Commit to save instructors and communities
+    community1 = Community.query.filter_by(name="CS10100").first()
+    community2 = Community.query.filter_by(name="CS20100").first()
 
-    # if community1 and community2:
-    #     # Make community1 a prerequisite for community2
-    #     community2.prerequisites.append(community1)
+    if community1 and community2:
+    # Make community1 a prerequisite for community2
+        community2.prerequisites.append(community1)
 
-    #     db.session.commit()
-    # db.session.commit()
+    db.session.commit()
+
+    # LONG COMMENT END
 
 
 def token_required(f):
@@ -206,12 +210,12 @@ def change_password():
     # EXIT 3 : Password not confirmed
 
     if not password == confirmation:
-        return jsonify({"error": "Confirmation failed"})
+        return jsonify({"error": "Your passwords do not match!"})
 
     # EXIT 4 : Password cannot be same one as before
 
     if bcrypt.check_password_hash(user.password, password):
-        return jsonify({"error": "Password is the same as before"})
+        return jsonify({"error": "Password cannot be the same one as before."})
 
     # All checks passed: change password
     
@@ -219,7 +223,45 @@ def change_password():
     user.password = hashed_password
     db.session.commit()
 
-    return jsonify({"msg": "Password change successful"})
+    return jsonify({"msg": "Password change successful!"})
+
+@app.route("/change-bio", methods=["POST"])
+def change_bio():
+
+    '''
+    body:
+    {
+        "authToken": <token>,
+        "new_bio": <new bio>
+    }
+    '''
+
+    token = request.json["authToken"]
+    token_data = jwt.decode(token, secret_key, algorithms=["HS256"])
+
+    new_bio = request.json["new_bio"]
+
+    # EXIT 1 : Token is invalid
+
+    if token is None:
+        print("Token is invalid")
+        return jsonify({"error": "Token is invalid"}), 401
+
+    user_id = token_data['id']
+    user = User.query.filter_by(id=user_id).first()
+
+    # EXIT 2 : User not found
+
+    if user is None:
+        print("User not found")
+        return jsonify({"error": "User not found"})
+
+    # All checks passed: change bio
+    
+    user.bio = bio
+    db.session.commit()
+
+    return jsonify({"msg": "Bio change successful"})
 
 @app.route("/report-post", methods=["POST"])
 def report_post():
@@ -640,7 +682,6 @@ def login_user():
     password = request.json["password"]
 
     user = User.query.filter_by(username=username).first()
-    print(user.id)
 
     if user is None:
         return jsonify({"error": "User does not exist"}), 401
