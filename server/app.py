@@ -205,7 +205,7 @@ def change_password():
 
     if user is None:
         print("User not found")
-        return jsonify({"error": "User not found"})
+        return jsonify({"error": "User not found."})
 
     # EXIT 3 : Password not confirmed
 
@@ -225,8 +225,8 @@ def change_password():
 
     return jsonify({"msg": "Password change successful!"})
 
-@app.route("/change-bio", methods=["POST"])
-def change_bio():
+@app.route("/update-bio", methods=["POST"])
+def update_bio():
 
     '''
     body:
@@ -723,40 +723,35 @@ def get_profile(user_id):
         "profile_pic": profile.profile_pic
     })
 
-@app.route("/update-profile", methods=["POST"])
-def update_profile():
+@app.route("/update-profile-pic", methods=["POST"])
+def update_profile_pic():
 
-    user_data = decode_token(request.json["token"])
+    '''
+    {
+        token = [token],
+        new_pic = [string]
+    }
+    '''
+
+    token = request.json["token"]
+    user_data = jwt.decode(token, secret_key, algorithms=["HS256"])
 
     if user_data is None:
         return jsonify({"error": "Token is invalid"}), 400
     
-    profile = Profile.query.filter_by(user_id=user_data[id]).first()
+    profile = Profile.query.filter_by(user_id=user_data['id']).first()
 
     if profile is None:
         return jsonify({"error": "No profile found"}), 400
 
-    new_nickname = request.json["nickname"]
-    new_bio = request.json["bio"]
-    new_profile_pic = request.json["profile_pic"]
-
-    if new_nickname:
-        profile.nickname = new_nickname
-
-    if new_bio:
-        profile.bio = new_bio
+    new_profile_pic = request.json["new_pic"]
 
     if new_profile_pic:
         profile.profile_pic = new_profile_pic
 
+    db.session.commit()
+
     return "200"
-    '''
-    return jsonify({
-        "id": user.id,
-        "username": user.username,
-        "email": user.email
-    })
-    '''
 
 
 @app.route('/upload-image', methods=['POST'])
