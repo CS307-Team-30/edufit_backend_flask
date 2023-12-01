@@ -162,6 +162,8 @@ def register_user():
         algorithm="HS256"
     )
 
+    print("Token created for user: " + token)
+
     return jsonify({
         "token": token
     })
@@ -288,13 +290,13 @@ def report_post():
     msg = Message(
         subject='Post Report #' + str(post_id),
         sender='edufitburner@gmail.com',
-        recipients=['jhcheng@purdue.edu']
+        recipients=['jhcheng@purdue.edu', 'kazis@purdue.edu', "ksharawn@purdue.edu", "ibrahimt@purdue.edu"]
     )
-    msg.body = "A user has reported Post #" + str(post_id) + " for inappropriate content.\nReason: " + data["reason"] + "\n\n#################\n\nPost title:\n" + post_title + "\n\nPost content:\n" + post_content
+    msg.body = "User " + username + " has reported Post #" + str(post_id) + " for inappropriate content.\nReason: " + data["reason"] + "\n\n#################\n\nPost title:\n" + post_title + "\n\nPost content:\n" + post_content
     mail.send(msg)
 
     return "Message sent!", 200
-
+                               
 @app.route("/add-comment", methods=["POST"])
 def add_comment():
     # Extract data from request
